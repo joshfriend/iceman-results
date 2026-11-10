@@ -1,8 +1,18 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
 import {
-  clockTime, findRiders, groupsFor, hm, hms, kde, parseRace, passCounts, waveStats,
+  clockTime, duration, findRiders, groupsFor, hm, hms, kde, ordinal, parseRace, passCounts, podium,
+  PODIUM_DEPTH, waveStats,
 } from "./stats.js";
+
+const AWARDS = {
+  1: { name: "Gold", color: "#c9a227" },
+  2: { name: "Silver", color: "#8a96a3" },
+  3: { name: "Bronze", color: "#b4733f" },
+  4: { name: "Podium", color: "#497cae" },
+  5: { name: "Podium", color: "#497cae" },
+};
+const TROPHY_PATH = "M7 2h10v2h4v3a5 5 0 0 1-4.6 5 5 5 0 0 1-3.4 3.4V18h3v3H8v-3h3v-2.6A5 5 0 0 1 7.6 12 5 5 0 0 1 3 7V4h4V2zm0 4H5v1a3 3 0 0 0 2 2.8V6zm10 0v3.8A3 3 0 0 0 19 7V6h-2z";
 
 const COLORS = {
   blue: "#497cae", teal: "#328c79", red: "#ca453d", ink: "#203346",
@@ -74,23 +84,22 @@ function show(rider) {
   setMessage("");
   $("rider-name").textContent = rider.name;
   $("rider-city").textContent = rider.city;
+  $("rider-chips").replaceChildren(
+    chip("Bib", rider.bib),
+    chip("Division", rider.division || "None listed"),
+  );
   $("report").hidden = false;
   $("details").hidden = !rider.finished;
   document.title = `${rider.name} — Iceman Cometh 2026`;
-  const facts = [
-    { label: "Bib", value: `#${rider.bib}` },
-    { label: "Division", value: rider.division },
-  ];
   if (!rider.finished) {
-    facts.push({ label: "Result", value: rider.status });
-    renderFacts(facts);
+    renderFacts([{ label: "Result", value: rider.status }]);
     $("rider-status").textContent = `Listed as ${rider.status}, so there's no finish time to chart.`;
     return;
   }
   $("rider-status").textContent = "";
   renderFacts([
     { label: "Finish time", value: hms(rider.net), note: "official net time", primary: true },
-    ...facts,
+    podiumFact(rider),
     { label: "Start", value: clockTime(rider.start), note: `wave ${rider.wave}` },
     { label: "Finished at", value: hms(rider.clock), note: "time of day" },
   ]);
@@ -104,15 +113,66 @@ function show(rider) {
   drawWaves(rider);
 }
 
+function chip(label, value) {
+  const el = document.createElement("span");
+  el.className = "chip";
+  const key = document.createElement("span");
+  key.className = "chip-label";
+  key.textContent = label;
+  el.append(key, String(value));
+  return el;
+}
+
+function trophy(color, label) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("class", "trophy");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", label);
+  svg.style.color = color;
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", TROPHY_PATH);
+  path.setAttribute("fill", "currentColor");
+  svg.append(path);
+  return svg;
+}
+
+function podiumFact(rider) {
+  const result = podium(rider, data.finishers);
+  if (!result) {
+    return { label: "Division podium", value: "–", note: "no division listed" };
+  }
+  const where = `of ${fmt(result.size)} in ${rider.division}`;
+  if (result.onPodium) {
+    const award = AWARDS[result.place];
+    const value = document.createDocumentFragment();
+    value.append(trophy(award.color, `${award.name} trophy`), ordinal(result.place));
+    return {
+      label: award.name === "Podium" ? "Division podium" : `${award.name} podium`,
+      value,
+      note: where,
+      accent: award.color,
+      primary: true,
+    };
+  }
+  return {
+    label: `Behind ${ordinal(PODIUM_DEPTH)} place`,
+    value: `+${duration(result.gap)}`,
+    note: `${ordinal(result.place)} ${where} · ${ordinal(PODIUM_DEPTH)} was ${hms(result.lastPodium.net)}`,
+    primary: true,
+  };
+}
+
 function renderFacts(facts) {
-  $("rider-facts").classList.toggle("short", facts.length === 3);
-  $("rider-facts").replaceChildren(...facts.map(({ label, value, note, primary }) => {
+  $("rider-facts").style.setProperty("--cols", facts.length);
+  $("rider-facts").replaceChildren(...facts.map(({ label, value, note, primary, accent }) => {
     const item = document.createElement("div");
     item.className = primary ? "fact primary" : "fact";
+    if (accent) item.style.setProperty("--accent", accent);
     const dt = document.createElement("dt");
     dt.textContent = label;
     const dd = document.createElement("dd");
-    dd.textContent = value;
+    dd.append(value);
     item.append(dt, dd);
     if (note) {
       const small = document.createElement("span");

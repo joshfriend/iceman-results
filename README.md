@@ -6,6 +6,8 @@ Static GitHub Pages site. Enter a bib number (or name) to see:
   started at the same time as you or earlier and finished after you on the clock. A rider passed
   you if they started at the same time as you or later and finished before you. Clock finish =
   scheduled wave start + official net time. These counts leave out DNFs and repeated passes.
+- **Division podium** (top 5): a trophy colored gold/silver/bronze for 1st–3rd, blue for 4th–5th;
+  otherwise the time behind the division's 5th place.
 - **Finish-time bell curves** (KDE + histogram) for overall, gender, division and the rider's start wave,
   shaded faster/slower than the rider, with official places.
 - **Box plot by wave**: median ± 1 SD box, fastest–slowest range, every finisher as a dot,

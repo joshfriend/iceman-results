@@ -62,3 +62,22 @@ test("finds riders by bib or name", () => {
   assert.ok(findRiders(riders, "friend josh").some((r) => r.bib === 4026));
   assert.deepEqual(findRiders(riders, "999999"), []);
 });
+
+test("podium gap is measured to the division's 5th place", async () => {
+  const { podium, duration, ordinal } = await import("../js/stats.js");
+  const result = podium(josh, finishers);
+  const fifth = finishers.find((r) => r.division === "Men 35" && r.divisionRank === 5);
+  assert.equal(result.onPodium, false);
+  assert.equal(result.place, 31);
+  assert.equal(result.size, 63);
+  assert.equal(result.gap, josh.net - fifth.net);
+  assert.ok(result.gap > 0);
+  const winner = finishers.find((r) => r.division === "Men 35" && r.divisionRank === 1);
+  assert.deepEqual(podium(winner, finishers), { onPodium: true, place: 1, size: 63 });
+  assert.equal(podium(riders.find((r) => r.bib === 4838), finishers), null);
+  assert.equal(podium(riders.find((r) => r.bib === 315), finishers), null);
+  assert.equal(duration(201), "3:21");
+  assert.equal(duration(3725), "1:02:05");
+  assert.deepEqual([1, 2, 3, 4, 11, 12, 13, 21, 22, 31].map(ordinal),
+    ["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "31st"]);
+});

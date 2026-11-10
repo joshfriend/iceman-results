@@ -32,6 +32,38 @@ export function passCounts(rider, finishers) {
   return { passed, passedBy, net: passed - passedBy };
 }
 
+export const PODIUM_DEPTH = 5;
+
+// Division podium status: places 1–5 podium; everyone else gets their gap to 5th place.
+export function podium(rider, finishers) {
+  if (!rider.finished || !rider.division) return null;
+  const division = finishers.filter((r) => r.division === rider.division);
+  const place = rider.divisionRank;
+  if (place <= PODIUM_DEPTH) return { onPodium: true, place, size: division.length };
+  const last = division.find((r) => r.divisionRank === PODIUM_DEPTH);
+  return {
+    onPodium: false,
+    place,
+    size: division.length,
+    lastPodium: last,
+    gap: rider.net - last.net,
+    placesBack: place - PODIUM_DEPTH,
+  };
+}
+
+export function ordinal(n) {
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
+
+export function duration(totalSeconds) {
+  const s = Math.round(totalSeconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+}
+
 export function median(values) {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = sorted.length >> 1;
