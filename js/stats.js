@@ -32,22 +32,20 @@ export function passCounts(rider, finishers) {
   return { passed, passedBy, net: passed - passedBy };
 }
 
-export const PODIUM_DEPTH = 5;
-
-// Division podium status: places 1–5 podium; everyone else gets their gap to 5th place.
-export function podium(rider, finishers) {
+// Division podium status; off the podium, the gap is to the last podium place (race.podiumDepth).
+export function podium(rider, finishers, depth) {
   if (!rider.finished || !rider.division) return null;
   const division = finishers.filter((r) => r.division === rider.division);
   const place = rider.divisionRank;
-  if (place <= PODIUM_DEPTH) return { onPodium: true, place, size: division.length };
-  const last = division.find((r) => r.divisionRank === PODIUM_DEPTH);
+  if (place <= depth) return { onPodium: true, place, size: division.length };
+  const last = division.find((r) => r.divisionRank === depth);
   return {
     onPodium: false,
     place,
     size: division.length,
     lastPodium: last,
     gap: rider.net - last.net,
-    placesBack: place - PODIUM_DEPTH,
+    placesBack: place - depth,
   };
 }
 

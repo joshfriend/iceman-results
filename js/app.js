@@ -2,7 +2,7 @@ import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
 import {
   clockTime, duration, findRiders, groupsFor, hm, hms, kde, ordinal, parseRace, passCounts, podium,
-  PODIUM_DEPTH, waveStats,
+  waveStats,
 } from "./stats.js";
 
 const AWARDS = {
@@ -21,7 +21,18 @@ const COLORS = {
 const fmt = d3.format(",");
 const $ = (id) => document.getElementById(id);
 
-const data = parseRace(await (await fetch("data/iceman-2026.json")).json());
+const index = await (await fetch("data/index.json")).json();
+const requestedYear = Number(new URLSearchParams(location.search).get("year"));
+const yearEntry = index.years.find((y) => y.year === requestedYear) ?? index.years[0];
+if (requestedYear && yearEntry.year !== requestedYear) {
+  const params = new URLSearchParams(location.search);
+  params.delete("year");
+  history.replaceState(null, "", params.size ? `?${params}` : location.pathname);
+}
+const data = parseRace(await (await fetch(`data/${yearEntry.path}`)).json());
+const raceTitle = `${data.race.name} ${data.race.year}`;
+$("race-title").textContent = raceTitle;
+document.title = `${raceTitle} results`;
 const waves = waveStats(data.finishers, data.race);
 const overallMinutes = data.finishers.map((r) => r.net / 60).sort((a, b) => a - b);
 $("source").href = data.race.resultsUrl;
@@ -76,7 +87,12 @@ function lookup(query, push = true) {
     return;
   }
   const rider = matches[0];
-  if (push) history.pushState(null, "", `?bib=${rider.bib}`);
+  if (push) {
+    const params = new URLSearchParams(location.search);
+    params.set("bib", rider.bib);
+    params.delete("r");
+    history.pushState(null, "", `?${params}`);
+  }
   show(rider);
 }
 
@@ -90,7 +106,7 @@ function show(rider) {
   );
   $("report").hidden = false;
   $("details").hidden = !rider.finished;
-  document.title = `${rider.name} — Iceman Cometh 2026`;
+  document.title = `${rider.name} — ${raceTitle}`;
   if (!rider.finished) {
     renderFacts([{ label: "Result", value: rider.status }]);
     $("rider-status").textContent = `Listed as ${rider.status}, so there's no finish time to chart.`;
@@ -138,7 +154,8 @@ function trophy(color, label) {
 }
 
 function podiumFact(rider) {
-  const result = podium(rider, data.finishers);
+  const depth = data.race.podiumDepth;
+  const result = podium(rider, data.finishers, depth);
   if (!result) {
     return { label: "Division podium", value: "–", note: "no division listed" };
   }
@@ -156,9 +173,9 @@ function podiumFact(rider) {
     };
   }
   return {
-    label: `Behind ${ordinal(PODIUM_DEPTH)} place`,
+    label: "Behind podium",
     value: `+${duration(result.gap)}`,
-    note: `${ordinal(result.place)} ${where} · ${ordinal(PODIUM_DEPTH)} was ${hms(result.lastPodium.net)}`,
+    note: `${ordinal(result.place)} ${where} · ${ordinal(depth)} was ${hms(result.lastPodium.net)}`,
     primary: true,
   };
 }
@@ -289,7 +306,7 @@ function drawWaves(rider) {
     [margin.left, width - margin.right],
   );
   const rowY = (i) => margin.top + rowH * i + rowH / 2;
-  const random = mulberry32(20261107);
+  const random = mulberry32(data.race.year);
 
   const svg = d3.select($("waves")).html("").append("svg")
     .attr("viewBox", `0 0 ${width} ${height}`)

@@ -1,0 +1,12 @@
+{
+  "year": 2026,
+  "date": "2026-11-07",
+  "resultsUrl": "https://my.raceresult.com/421674/results",
+  "firstStart": "08:45:00",
+  "waveSeconds": 180,
+  "podiumDepth": 5,
+  "sources": {
+    "results": "raw/overall-results.json",
+    "startList": "raw/start-list.txt"
+  }
+}

@@ -4,9 +4,9 @@ import { test } from "node:test";
 
 import { findRiders, groupsFor, kde, parseRace, passCounts, waveStats } from "../js/stats.js";
 
-const { race, riders, finishers } = parseRace(
-  JSON.parse(readFileSync(new URL("../data/iceman-2026.json", import.meta.url))),
-);
+const readJson = (path) => JSON.parse(readFileSync(new URL(`../data/${path}`, import.meta.url)));
+const dataIndex = readJson("index.json");
+const { race, riders, finishers } = parseRace(readJson("2026/results.json"));
 const josh = riders.find((r) => r.bib === 4026);
 
 test("loads every result row", () => {
@@ -65,7 +65,8 @@ test("finds riders by bib or name", () => {
 
 test("podium gap is measured to the division's 5th place", async () => {
   const { podium, duration, ordinal } = await import("../js/stats.js");
-  const result = podium(josh, finishers);
+  assert.equal(race.podiumDepth, 5);
+  const result = podium(josh, finishers, race.podiumDepth);
   const fifth = finishers.find((r) => r.division === "Men 35" && r.divisionRank === 5);
   assert.equal(result.onPodium, false);
   assert.equal(result.place, 31);
@@ -73,11 +74,24 @@ test("podium gap is measured to the division's 5th place", async () => {
   assert.equal(result.gap, josh.net - fifth.net);
   assert.ok(result.gap > 0);
   const winner = finishers.find((r) => r.division === "Men 35" && r.divisionRank === 1);
-  assert.deepEqual(podium(winner, finishers), { onPodium: true, place: 1, size: 63 });
-  assert.equal(podium(riders.find((r) => r.bib === 4838), finishers), null);
-  assert.equal(podium(riders.find((r) => r.bib === 315), finishers), null);
+  assert.deepEqual(podium(winner, finishers, 5), { onPodium: true, place: 1, size: 63 });
+  assert.equal(podium(riders.find((r) => r.bib === 4838), finishers, 5), null);
+  assert.equal(podium(riders.find((r) => r.bib === 315), finishers, 5), null);
   assert.equal(duration(201), "3:21");
   assert.equal(duration(3725), "1:02:05");
   assert.deepEqual([1, 2, 3, 4, 11, 12, 13, 21, 22, 31].map(ordinal),
     ["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "31st"]);
+});
+
+test("index lists every year folder, newest first, with matching counts", () => {
+  assert.equal(dataIndex.race, "Iceman Cometh");
+  const years = dataIndex.years.map((y) => y.year);
+  assert.deepEqual(years, [...years].sort((a, b) => b - a));
+  for (const entry of dataIndex.years) {
+    const yearData = parseRace(readJson(entry.path));
+    assert.equal(yearData.race.year, entry.year);
+    assert.equal(yearData.riders.length, entry.riders);
+    assert.equal(yearData.finishers.length, entry.finishers);
+  }
+  assert.equal(josh.person, "josh-friend");
 });
