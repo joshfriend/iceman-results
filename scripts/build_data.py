@@ -10,11 +10,13 @@ data/index.json is generated from the year folders so the site can list and comp
 Usage: python3 scripts/build_data.py [YEAR ...]   (default: every year folder)
 """
 
+import csv
 import json
 import re
 import sys
 import unicodedata
 from collections import Counter
+from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,6 +26,7 @@ RACE_NAME = "Iceman Cometh"
 FIELDS = [
     "bib", "person", "name", "city", "status", "net", "gender",
     "genderRank", "division", "divisionRank", "start", "wave", "athlinksRacerId", "age", "raceGroup",
+    "raceEvent", "raceGroupSource", "waveSource", "startSource",
 ]
 START_LINE = re.compile(r"^\s*(\d+)\s+(.+?)\s+(\d+)\s+(\d{2}:\d{2}:\d{2})\s+(\d+)\s*$")
 RANKED = re.compile(r"^\s*(.*?)\s*\((-?\d+)\)\s*$")
@@ -66,6 +69,147 @@ def parse_start_list(path):
     return starts
 
 
+class ArchivedResults(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.in_pre = False
+        self.parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "pre":
+            self.in_pre = True
+        if self.in_pre and tag == "br":
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag == "pre":
+            self.in_pre = False
+            self.parts.append("\n")
+
+    def handle_data(self, data):
+        if self.in_pre:
+            self.parts.append(data)
+
+
+def parse_runmichigan(path):
+    """Read published fixed-width category tables, not inferred age brackets."""
+    parser = ArchivedResults()
+    parser.feed(path.read_text())
+    gender = division = None
+    columns = None
+    for line in "".join(parser.parts).splitlines():
+        text = line.strip()
+        if text in {"MALE ICEMAN RESULTS", "FEMALE ICEMAN RESULTS"}:
+            gender = "M" if text.startswith("MALE") else "F"
+        if text.startswith("CLASS:") or text in {"PRO MEN", "PRO WOMEN"}:
+            division = text.removeprefix("CLASS:").strip()
+            columns = None
+        elif text.startswith("====="):
+            columns = [(match.start(), match.end()) for match in re.finditer(r"=+", line)]
+        elif re.match(r"^\s*\d+\s", line) and columns and division and gender:
+            if "DISQUALIFIED" in division:
+                continue
+            values = [line[start:end].strip() for start, end in columns]
+            has_bib = len(columns) == 7
+            finish = re.search(r"(\d+:\d{2}:\d{2})\s*$", line)
+            if len(columns) not in {6, 7} or not finish:
+                raise ValueError(f"{path}: unrecognized archived result: {line}")
+            yield {
+                "bib": int(values[2]) if has_bib else None,
+                "name": values[1], "gender": gender, "net": seconds(finish[1]),
+                "division": division, "divisionRank": int(values[0]),
+                "raceGroup": race_group({"division": division}),
+            }
+
+
+def parse_metadata_csv(path):
+    with path.open(newline="") as stream:
+        reader = csv.DictReader(stream)
+        if not {"bib", "name", "gender", "net"}.issubset(reader.fieldnames or []):
+            raise ValueError(f"{path}: metadata CSV requires bib, name, gender, net columns")
+        allowed = {
+            "bib", "name", "gender", "net", "wave", "start", "raceGroup",
+            "raceEvent", "division", "divisionRank",
+        }
+        if set(reader.fieldnames) - allowed:
+            raise ValueError(f"{path}: unknown metadata CSV columns")
+        if len(set(reader.fieldnames)) != len(reader.fieldnames):
+            raise ValueError(f"{path}: duplicate metadata CSV columns")
+        for line, row in enumerate(reader, 2):
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError(f"{path}:{line}: inconsistent metadata CSV columns")
+            record = {key: value.strip() for key, value in row.items() if value and key}
+            if not record.get("name") or record.get("gender") not in {"M", "F", "U"}:
+                raise ValueError(f"{path}:{line}: missing name or invalid gender")
+            for key in ("bib", "wave", "divisionRank"):
+                if key in record:
+                    if not record[key].isdigit() or int(record[key]) <= 0:
+                        raise ValueError(f"{path}:{line}: invalid {key}")
+                    record[key] = int(record[key])
+            for key in ("net", "start"):
+                if key in record:
+                    if not re.fullmatch(r"\d+:[0-5]\d:[0-5]\d", record[key]):
+                        raise ValueError(f"{path}:{line}: invalid {key}")
+                    record[key] = seconds(record[key])
+            if record.get("net") == 0:
+                raise ValueError(f"{path}:{line}: net must be positive or blank for nonfinishers")
+            if "start" in record and record["start"] >= 86400:
+                raise ValueError(f"{path}:{line}: start must be seconds within the race day")
+            if "raceGroup" in record and record["raceGroup"] not in {"amateur", "junior", "pro"}:
+                raise ValueError(f"{path}:{line}: invalid raceGroup")
+            if "raceEvent" in record and record["raceEvent"] not in {
+                "iceman", "junior-iceman", "slush-cup",
+            }:
+                raise ValueError(f"{path}:{line}: invalid raceEvent")
+            record.setdefault("bib", None)
+            record.setdefault("net", None)
+            yield record
+
+
+def supplement_metadata(riders, records, source, allow_unmatched=False):
+    by_identity = {}
+    for rider in riders:
+        key = (person_key(rider["name"]), rider["gender"], rider["net"])
+        by_identity.setdefault(key, []).append(rider)
+    matched = set()
+    missing = 0
+    for record in records:
+        key = (person_key(record["name"]), record["gender"], record["net"])
+        candidates = [
+            rider for rider in by_identity.get(key, [])
+            if record["bib"] is None or rider["bib"] is None
+            or str(rider["bib"]) == str(record["bib"])
+        ]
+        if not candidates and allow_unmatched:
+            missing += 1
+            continue
+        if len(candidates) != 1:
+            raise ValueError(f"{source}: no unique matching result for {record['name']} (bib {record['bib']})")
+        rider = candidates[0]
+        if id(rider) in matched:
+            raise ValueError(f"{source}: repeated metadata for {record['name']}")
+        matched.add(id(rider))
+        if rider["bib"] is None and record["bib"] is not None:
+            if any(other is not rider and str(other["bib"]) == str(record["bib"]) for other in riders):
+                raise ValueError(f"{source}: duplicate recovered bib {record['bib']}")
+            rider["bib"] = record["bib"]
+        for key in ("wave", "start", "raceGroup", "raceEvent", "division", "divisionRank"):
+            if key not in record:
+                continue
+            if key in {"wave", "start"} and rider.get(key) not in {None, record[key]}:
+                raise ValueError(f"{source}: conflicting {key} for bib {rider['bib']}")
+            rider[key] = record[key]
+            if key in {"wave", "start", "raceGroup"}:
+                rider[f"{key}Source"] = source
+        if "division" in record and "raceGroup" not in record:
+            group = race_group(record)
+            if group in {"pro", "junior"}:
+                rider["raceGroup"] = group
+                rider["raceGroupSource"] = source
+    print(f"{source}: matched {len(matched)} metadata rows; {missing} unmatched rows left unchanged")
+    return len(matched)
+
+
 def parse_raceresult(path):
     """RaceResult overall list: BIB, ID, place|status, name, city, net, BIB, gender (rank), division (rank)."""
     source = json.loads(path.read_text())
@@ -73,14 +217,17 @@ def parse_raceresult(path):
     for row in source["data"]:
         gender, gender_rank = ranked(row[7])
         division, division_rank = ranked(row[8]) if has_division else ("", None)
-        status = int(row[2]) if row[2].isdigit() and int(row[2]) > 0 else row[2]
+        raw_status = str(row[2]).strip()
+        status = int(raw_status) if raw_status.isdigit() and int(raw_status) > 0 else (
+            "DNF" if raw_status == "-1" else raw_status
+        )
         yield {
             "bib": row[0],
             "name": row[3],
             "city": row[4],
             "status": status,
             "net": seconds(row[5]) if isinstance(status, int)
-            and re.fullmatch(r"\d+:\d{2}:\d{2}", row[5]) else None,
+            and re.fullmatch(r"\d+:\d{2}(?::\d{2})?(?:\.\d+)?", row[5]) else None,
             "gender": gender,
             "genderRank": gender_rank,
             "division": division,
@@ -143,16 +290,18 @@ def parse_registericeman(path, first_start, wave_seconds):
         wave = int(wave_match[1]) if wave_match else None
         finish_text = str(value(row, finish_heading)).strip()
         net = seconds(finish_text) if re.fullmatch(r"\d+:\d{2}(?::\d{2})?(?:\.\d+)?", finish_text) else None
+        start = (
+            first_start + (wave - 1) * wave_seconds
+            if wave is not None and first_start is not None and wave_seconds is not None else None
+        )
 
         if place is not None and place > 0 and net is not None and net > 0:
             status = place
-            start = first_start + (wave - 1) * wave_seconds if wave is not None else None
         else:
             status = "DSQ" if raw_status == "DQ" else raw_status or "DNF"
             if place is not None:
                 status = "DNF"
             net = None
-            start = first_start + (wave - 1) * wave_seconds if wave is not None else None
 
         yield {
             "bib": int(bib),
@@ -212,6 +361,29 @@ def athlinks_divisions(path, event_id, course_ids):
     return memberships
 
 
+def athlinks_race_group(division, gender, course, metadata, config):
+    group = race_group({"division": division})
+    if group != "amateur":
+        return group
+    if config.get("divisionFromCourse"):
+        return "amateur" if division else "unclassified"
+    course_metadata = next(
+        (item for item in metadata if item["eventCourseId"] == course["courseId"]), None,
+    )
+    if course_metadata and division:
+        names = {item["name"].strip() for item in course_metadata["metadata"]["divisions"]}
+        pro_names = [name for name in names if race_group({"division": name}) == "pro"]
+        gender_pattern = r"\b(?:M|Men)\b" if gender == "M" else r"\b(?:F|Women)\b"
+        if (gender in {"M", "F"} and division in names
+                and any(re.search(gender_pattern, name, re.I) for name in pro_names)):
+            return "amateur"
+    if course["courseName"].strip().lower() == "iceman" and any(
+        race_group({"division": item["eventCourseName"]}) == "pro" for item in metadata
+    ):
+        return "amateur"
+    return "unclassified"
+
+
 def parse_athlinks(path, config):
     source = json.loads(path.read_text())
     if source["eventId"] != config["eventId"]:
@@ -227,12 +399,17 @@ def parse_athlinks(path, config):
     memberships = athlinks_divisions(
         path.parent.parent / division_source, source["eventId"], expected_course_ids,
     ) if division_source else {}
-    metadata_path = path.with_name("athlinks-metadata.json")
+    metadata_path = (
+        path.parent.parent / config["metadata"]
+        if config.get("metadata") else path.with_name("athlinks-metadata.json")
+    )
     course_intervals = {}
+    metadata_courses = []
     if metadata_path.exists():
         metadata = json.loads(metadata_path.read_text())
         if metadata["eventId"] != source["eventId"]:
             raise ValueError(f"{metadata_path} contains the wrong Athlinks event")
+        metadata_courses = metadata["eventCourseMetadata"]
         course_intervals = {
             course["eventCourseId"]: course["metadata"]["intervals"]
             for course in metadata["eventCourseMetadata"]
@@ -327,6 +504,9 @@ def parse_athlinks(path, config):
                 "entryId": row.get("entryId"),
                 "athlinksRacerId": row.get("racerId") or None,
                 "age": published_age(row.get("age")),
+                "raceGroup": athlinks_race_group(
+                    division, row.get("gender"), course, metadata_courses, config,
+                ),
             })
 
     unmatched = len(memberships.keys() - matched_memberships)
@@ -402,8 +582,7 @@ def race_group(rider):
     if re.search(r"\bpro\b|pro/1|\bcat\s*1\b", division, re.I):
         return "pro"
     ages = re.search(r"\b(?:men|women|m|f)\s+(\d{1,2})(?:\s*-\s*(\d{1,2}))?\b", division, re.I)
-    if (rider.get("age") is not None and rider["age"] <= 18
-            or re.search(r"\bjunior", division, re.I)
+    if (re.search(r"\bjunior", division, re.I)
             or ages and 0 < int(ages[2] or ages[1]) <= 18):
         return "junior"
     return "amateur"
@@ -424,6 +603,14 @@ def build_year(folder):
         parsed_results = parse_raceresult(folder / config["sources"]["results"])
 
     parsed_results = list(parsed_results)
+    for rider in parsed_results:
+        rider.update(
+            raceEvent=config.get("raceEvent", "iceman"),
+            raceGroupSource=None, waveSource=None, startSource=None,
+        )
+        if rider.get("wave") is not None:
+            rider["waveSource"] = "results"
+            rider["startSource"] = "waveSchedule" if rider.get("start") is not None else None
     if "athlinksIdentity" in config:
         identity = config["athlinksIdentity"]
         athlinks_riders = parse_athlinks(folder / identity["results"], identity)
@@ -441,36 +628,78 @@ def build_year(folder):
         else:
             raise ValueError(f"Unknown additional results format: {source['format']}")
         for rider in extra:
-            rider["raceGroup"] = source["raceGroup"]
-            if source["raceGroup"] == "pro":
+            if "raceGroup" in source:
+                rider["raceGroup"] = source["raceGroup"]
+            rider.update(
+                raceEvent=source.get("raceEvent", "iceman"),
+                raceGroupSource="resultSet" if "raceGroup" in source else None,
+                waveSource=None, startSource=None,
+            )
+            if rider.get("wave") is not None:
+                rider["waveSource"] = "results"
+                rider["startSource"] = "waveSchedule" if rider.get("start") is not None else None
+            if source.get("raceGroup") == "pro" and not rider["division"]:
                 rider["division"] = f"Pro/Cat 1 {rider['gender']}"
                 rider["divisionRank"] = rider["genderRank"]
             parsed_results.append(rider)
 
-    bibs = [str(r["bib"]) for r in parsed_results if r["bib"] is not None]
-    if len(bibs) != len(set(bibs)) and config.get("additionalResults"):
-        raise ValueError(f"{folder}: duplicate bibs across result sets")
-    pro_genders = {
-        r["gender"] for r in parsed_results
-        if r.get("raceGroup", race_group(r)) == "pro"
-    }
+    metadata_coverage = []
+    for index, source in enumerate(config.get("riderMetadata", [])):
+        path = folder / source["path"]
+        if source["format"] == "runmichigan":
+            records = parse_runmichigan(path)
+        elif source["format"] == "csv":
+            records = parse_metadata_csv(path)
+        else:
+            raise ValueError(f"Unknown rider metadata format: {source['format']}")
+        records = list(records)
+        matched = supplement_metadata(
+            parsed_results, records, f"metadata:{index}",
+            allow_unmatched=source["format"] == "runmichigan",
+        )
+        metadata_coverage.append({
+            "source": f"metadata:{index}", "rows": len(records), "matched": matched,
+            "unmatched": len(records) - matched,
+        })
+
     riders = []
     for r in parsed_results:
         r.setdefault("athlinksRacerId", None)
         r.setdefault("age", None)
         r.setdefault("raceGroup", race_group(r))
-        if (config.get("resultsFormat") == "athlinks" and config["year"] < 2024
-                and r["raceGroup"] == "amateur" and r["gender"] not in pro_genders):
-            r["raceGroup"] = "unclassified"
+        if r["raceGroupSource"] is None:
+            r["raceGroupSource"] = (
+                None if r["raceGroup"] == "unclassified"
+                else "division" if r["division"] else "resultSet"
+            )
         if config.get("resultsFormat") not in {"registericeman", "athlinks"}:
             start, wave = starts.get(str(r["bib"]), (None, None))
+            for key, value in (("start", start), ("wave", wave)):
+                if value is not None and r.get(key) not in {None, value}:
+                    raise ValueError(f"{folder}: conflicting {key} for bib {r['bib']}")
+            start_source = "startList" if start is not None else r["startSource"]
+            wave_source = "startList" if wave is not None else r["waveSource"]
             if not wave and start is not None and r["raceGroup"] == "amateur":
                 if start >= first_start and (start - first_start) % wave_seconds == 0:
                     wave = (start - first_start) // wave_seconds + 1
-            r.update(bib=int(r["bib"]), person=person_key(r["name"]), start=start, wave=wave)
+                    wave_source = "waveSchedule"
+            r.update(
+                bib=int(r["bib"]), person=person_key(r["name"]),
+                start=start if start is not None else r.get("start"),
+                wave=wave if wave is not None else r.get("wave"),
+                startSource=start_source, waveSource=wave_source,
+            )
+        if r.get("start") is None and r.get("wave") is not None and first_start is not None:
+            if wave_seconds is None or r["raceGroup"] != "amateur":
+                raise ValueError(f"{folder}: wave for bib {r['bib']} requires an explicit start time")
+            r["start"] = first_start + (r["wave"] - 1) * wave_seconds
+            r["startSource"] = "waveSchedule"
         if isinstance(r["status"], int):
             assert r["net"] is not None, f"finisher {r['bib']} lacks a time"
-            if config.get("resultsFormat") not in {"athlinks", "registericeman"}:
+            if (
+                config.get("resultsFormat") not in {"athlinks", "registericeman"}
+                and r["raceEvent"] == config.get("raceEvent", "iceman")
+            ):
                 assert r["wave"] is not None or r["raceGroup"] != "amateur", f"finisher {r['bib']} lacks a wave"
         riders.append([r[field] for field in FIELDS])
 
@@ -487,6 +716,12 @@ def build_year(folder):
             "athlinks": "Athlinks results",
             "registericeman": "Registericeman results",
         }.get(config.get("resultsFormat"), "official overall results")),
+        "dataSources": {
+            **config["sources"],
+            "additionalResults": config.get("additionalResults", []),
+            "riderMetadata": config.get("riderMetadata", []),
+        },
+        "metadataCoverage": metadata_coverage,
     }
     if "waveTimeRequirements" in config:
         race["waveTimeRequirements"] = [
@@ -508,20 +743,37 @@ def main(years):
     for folder in folders:
         if not years or folder.name in years:
             build_year(folder)
-    entries = []
-    for folder in folders:
-        results = json.loads((folder / "results.json").read_text())
-        status = results["fields"].index("status")
-        entries.append({
-            "year": results["race"]["year"],
-            "date": results["race"]["date"],
-            "path": f"{folder.name}/results.json",
-            "riders": len(results["riders"]),
-            "finishers": sum(isinstance(r[status], int) for r in results["riders"]),
-        })
-    entries.sort(key=lambda e: e["year"], reverse=True)
-    (DATA / "index.json").write_text(json.dumps({"race": RACE_NAME, "years": entries}, indent=2) + "\n")
-    print(f"Wrote data/index.json: {[e['year'] for e in entries]}")
+
+    def entries_for_event(event):
+        entries = []
+        for folder in folders:
+            results = json.loads((folder / "results.json").read_text())
+            fields = results["fields"]
+            event_index = fields.index("raceEvent")
+            status_index = fields.index("status")
+            riders = [
+                rider for rider in results["riders"]
+                if rider[event_index] == event
+                or event == "iceman" and rider[event_index] != "slush-cup"
+            ]
+            if not riders:
+                continue
+            entries.append({
+                "year": results["race"]["year"],
+                "date": results["race"]["date"],
+                "path": f"{folder.name}/results.json",
+                "riders": len(riders),
+                "finishers": sum(isinstance(rider[status_index], int) for rider in riders),
+            })
+        return sorted(entries, key=lambda entry: entry["year"], reverse=True)
+
+    events = {
+        "iceman": {"name": RACE_NAME, "years": entries_for_event("iceman")},
+        "slush-cup": {"name": "Slush Cup", "years": entries_for_event("slush-cup")},
+    }
+    index = {"race": RACE_NAME, "years": events["iceman"]["years"], "events": events}
+    (DATA / "index.json").write_text(json.dumps(index, indent=2) + "\n")
+    print(f"Wrote data/index.json: {[e['year'] for e in events['iceman']['years']]}")
 
 
 if __name__ == "__main__":

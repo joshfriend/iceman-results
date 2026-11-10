@@ -167,12 +167,15 @@ def fetch_division_page(event_id, course_id, division_id, offset, expected=None)
     raise ValueError(f"Athlinks division {division_id} returned an incomplete page at {offset}")
 
 
-def write_divisions(event, courses):
+def write_divisions(
+    event, courses, metadata_filename="athlinks-metadata.json",
+    divisions_filename="athlinks-divisions.json",
+):
     year = int(event["raceDate"][:4])
     event_id = int(event["raceID"])
     folder = DATA / str(year) / "raw"
-    metadata_path = folder / "athlinks-metadata.json"
-    divisions_path = folder / "athlinks-divisions.json"
+    metadata_path = folder / metadata_filename
+    divisions_path = folder / divisions_filename
     metadata = (
         json.loads(metadata_path.read_text()) if metadata_path.exists()
         else fetch_json(f"https://results.athlinks.com/metadata/event/{event_id}")
@@ -407,6 +410,10 @@ def write_year(event, courses):
         "podiumDepth": 5,
         "sources": {"results": "raw/athlinks-results.json"},
     }
+    if existing_config:
+        for key in ("additionalResults", "riderMetadata"):
+            if key in existing_config:
+                config[key] = existing_config[key]
     if existing_config and existing_config.get("resultsFormat") != "athlinks":
         existing_config["athlinksIdentity"] = {
             "eventId": event_id,

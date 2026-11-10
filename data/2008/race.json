@@ -15,5 +15,12 @@
   "sources": {
     "results": "raw/athlinks-results.json",
     "divisions": "raw/athlinks-divisions.json"
-  }
+  },
+  "riderMetadata": [
+    {
+      "format": "runmichigan",
+      "path": "raw/runmichigan-results.html",
+      "sourceUrl": "https://www.runmichigan.com/results/full.php/2008/11/08/iceman-cometh-challenge-2.html"
+    }
+  ]
 }

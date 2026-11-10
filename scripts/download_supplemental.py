@@ -1,4 +1,4 @@
-"""Download separately published long-course junior and pro results.
+"""Download separate junior/pro results and archived category tables.
 
 Usage: python3 -m scripts.download_supplemental
 Existing primary results and Athlinks identity supplements are left untouched.
@@ -8,7 +8,45 @@ import json
 import urllib.parse
 import urllib.request
 
-from scripts.download_athlinks import DATA, fetch_course_page, fetch_json
+from scripts.download_athlinks import (
+    DATA, MASTER_API, MASTER_EVENT_ID, PAGE_SIZE, deduplicate_rows, fetch_course_page,
+    fetch_json, write_divisions,
+)
+from scripts.build_data import parse_runmichigan
+
+
+ARCHIVED_CATEGORIES = {
+    2008: "https://www.runmichigan.com/results/full.php/2008/11/08/iceman-cometh-challenge-2.html",
+    2010: "https://www.runmichigan.com/results/full.php/2010/11/06/iceman-cometh-challenge-3.html",
+}
+
+
+def download_archived_categories():
+    for year, url in ARCHIVED_CATEGORIES.items():
+        folder = DATA / str(year)
+        relative = "raw/runmichigan-results.html"
+        path = folder / relative
+        if not path.exists():
+            request = urllib.request.Request(url, headers={"User-Agent": "iceman-results data downloader"})
+            with urllib.request.urlopen(request, timeout=30) as response:
+                html = response.read().decode("utf-8")
+            if f"{year} ICEMAN COMETH CHALLENGE" not in html:
+                raise ValueError(f"{url}: received the wrong archived event")
+            path.write_text(html)
+        records = list(parse_runmichigan(path))
+        if not records or not any(row["raceGroup"] == "pro" for row in records):
+            raise ValueError(f"{url}: no published category results")
+        race_path = folder / "race.json"
+        race = json.loads(race_path.read_text())
+        sources = race.setdefault("riderMetadata", [])
+        entry = {"format": "runmichigan", "path": relative, "sourceUrl": url}
+        existing = [source for source in sources if source["path"] == relative]
+        if existing and existing != [entry]:
+            raise ValueError(f"{race_path}: conflicting archived metadata configuration")
+        if not existing:
+            sources.append(entry)
+        race_path.write_text(json.dumps(race, indent=2) + "\n")
+        print(f"{year}: archived {len(records)} published category rows")
 
 
 def registericeman(result_set):
@@ -52,7 +90,139 @@ def raceresult(config, name):
     return result
 
 
+def download_slush_cup_athlinks():
+    master = fetch_json(MASTER_API)
+    if not master.get("success"):
+        raise RuntimeError(f"Athlinks event lookup failed: {master.get('errorMessage')}")
+
+    events = [
+        event for event in master["result"]["eventRaces"]
+        if 2001 <= int(event["raceDate"][:4]) <= 2025
+    ]
+    for event in events:
+        year = int(event["raceDate"][:4])
+        courses = [
+            course for course in event["eventCourses"]
+            if "slush" in course["courseName"].lower()
+            and "tandem" not in course["courseName"].lower()
+            and int(course.get("resultCount") or 0) > 0
+        ]
+        if not courses:
+            continue
+
+        event_id = int(event["raceID"])
+        course_ids = {course["eventCourseID"] for course in courses}
+        folder = DATA / str(year)
+        race_path = folder / "race.json"
+        race = json.loads(race_path.read_text())
+        existing = next((
+            item for item in race.get("additionalResults", [])
+            if item.get("raceEvent") == "slush-cup"
+        ), None)
+        if (
+            existing
+            and existing.get("eventId") == event_id
+            and set(existing.get("courseIds", [])) == course_ids
+            and all((folder / existing[key]).exists() for key in ("results", "metadata", "divisions"))
+        ):
+            print(f"{year}: Slush Cup results already downloaded")
+            continue
+        raw_folder = folder / "raw"
+        raw_folder.mkdir(parents=True, exist_ok=True)
+        results_path = raw_folder / "slush-cup-results.json"
+        downloaded = []
+        for course in courses:
+            course_id = course["eventCourseID"]
+            page, first_group = fetch_course_page(event_id, course_id, 0)
+            if first_group is None:
+                raise ValueError(f"{year}: empty Slush Cup course {course_id}")
+            total = int(first_group["totalAthletes"])
+            pages = [page]
+            rows = list(first_group["interval"]["intervalResults"])
+            for offset in range(PAGE_SIZE, total, PAGE_SIZE):
+                page, group = fetch_course_page(event_id, course_id, offset, total)
+                if group is None or int(group["totalAthletes"]) != total:
+                    raise ValueError(f"{year}: incomplete Slush Cup course {course_id}")
+                pages.append(page)
+                rows.extend(group["interval"]["intervalResults"])
+            unique_rows = deduplicate_rows(rows, course_id)
+            highest_place = max(
+                (int(row["overallRank"]) for row in unique_rows
+                 if str(row.get("overallRank", "")).isdigit()),
+                default=0,
+            )
+            if len(unique_rows) != total or highest_place < int(course["resultCount"]):
+                raise ValueError(f"{year}: incomplete Slush Cup results for course {course_id}")
+            downloaded.append({
+                "courseId": course_id,
+                "courseName": course["courseName"],
+                "totalAthletes": total,
+                "pages": pages,
+            })
+
+        results_path.write_text(json.dumps({
+            "eventId": event_id,
+            "courses": sorted(downloaded, key=lambda course: course["courseId"]),
+        }, separators=(",", ":"), ensure_ascii=False))
+
+        metadata_path = raw_folder / "slush-cup-metadata.json"
+        metadata = fetch_json(f"https://results.athlinks.com/metadata/event/{event_id}")
+        if metadata.get("eventId") != event_id:
+            raise ValueError(f"{metadata_path} contains the wrong Athlinks event")
+        metadata_path.write_text(json.dumps(metadata, separators=(",", ":"), ensure_ascii=False))
+        write_divisions(
+            event, courses, metadata_filename="slush-cup-metadata.json",
+            divisions_filename="slush-cup-divisions.json",
+        )
+
+        source = {
+            "raceEvent": "slush-cup",
+            "format": "athlinks",
+            "eventId": event_id,
+            "courseIds": sorted(course_ids),
+            "results": "raw/slush-cup-results.json",
+            "metadata": "raw/slush-cup-metadata.json",
+            "divisions": "raw/slush-cup-divisions.json",
+            "resultsUrl": (
+                f"https://www.athlinks.com/event/{MASTER_EVENT_ID}/results/"
+                f"Event/{event_id}/Course/{min(course_ids)}/Results?page=1"
+            ),
+        }
+        additional = [
+            item for item in race.get("additionalResults", [])
+            if item.get("raceEvent") != "slush-cup"
+        ]
+        additional.append(source)
+        race["additionalResults"] = additional
+        race_path.write_text(json.dumps(race, indent=2) + "\n")
+        print(f"{year}: saved {sum(c['totalAthletes'] for c in downloaded)} Slush Cup results")
+
+
+def download_2026_slush_cup():
+    config = fetch_json("https://my.raceresult.com/421674/results/config")
+    name = "03: Result Lists|SlushCup {Overall Results}"
+    result = raceresult(config, name)
+    path = DATA / "2026/raw/slush-cup-results.json"
+    path.write_text(json.dumps(result, separators=(",", ":"), ensure_ascii=False))
+    race_path = DATA / "2026/race.json"
+    race = json.loads(race_path.read_text())
+    additional = [
+        item for item in race.get("additionalResults", [])
+        if item.get("raceEvent") != "slush-cup"
+    ]
+    additional.append({
+        "raceEvent": "slush-cup",
+        "format": "raceresult",
+        "results": "raw/slush-cup-results.json",
+        "resultsUrl": "https://my.raceresult.com/421674/results",
+    })
+    race["additionalResults"] = additional
+    race_path.write_text(json.dumps(race, indent=2) + "\n")
+    print(f"2026: saved {len(result['data'])} Slush Cup results")
+
+
 def main():
+    download_archived_categories()
     metadata = json.loads((DATA / "2024/raw/athlinks-metadata.json").read_text())
     course_id = 2525753
     course = next(c for c in metadata["eventCourseMetadata"] if c["eventCourseId"] == course_id)
@@ -91,12 +261,16 @@ def main():
             path = f"raw/{group}-results.json"
             (folder / path).write_text(json.dumps(payload, separators=(",", ":"), ensure_ascii=False))
             entry = {"raceGroup": group, "format": format_name, "results": path}
+            if group == "junior":
+                entry["raceEvent"] = "junior-iceman"
             if format_name == "athlinks":
                 entry.update(eventId=event_id, courseIds=[course_id])
             additional.append(entry)
             print(f"{year}: saved {group} results")
         race["additionalResults"] = additional
         race_path.write_text(json.dumps(race, indent=2) + "\n")
+    download_slush_cup_athlinks()
+    download_2026_slush_cup()
 
 
 if __name__ == "__main__":

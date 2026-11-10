@@ -1,0 +1,3058 @@
+{
+  "years": [
+    {
+      "year": 2001,
+      "entries": 1888,
+      "events": {
+        "iceman": {
+          "entries": 1888,
+          "finishers": 1888
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "junior": 22,
+        "unclassified": 1866
+      },
+      "raceGroupEvidence": {
+        "division": 22,
+        "unknown": 1866
+      },
+      "unclassifiedDivisions": {
+        "": 22,
+        "F 15-19": 74,
+        "F 25-29": 2,
+        "F 30-34": 1,
+        "F 35-39": 82,
+        "F 45-49": 28,
+        "F N/A": 24,
+        "M 15-19": 117,
+        "M 25-29": 175,
+        "M 30-34": 303,
+        "M 35-39": 293,
+        "M 40-44": 259,
+        "M 45-49": 258,
+        "M 55-59": 58,
+        "M 65-69": 7,
+        "M N/A": 161,
+        "U 15-19": 1,
+        "U 30-34": 1
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 143287,
+          "name": "Mountain Bike- 24Mi",
+          "included": true,
+          "categoryLabels": [
+            "F 10-14",
+            "F 15-19",
+            "F 25-29",
+            "F 30-34",
+            "F 35-39",
+            "F 45-49",
+            "F N/A",
+            "M 10-14",
+            "M 15-19",
+            "M 25-29",
+            "M 30-34",
+            "M 35-39",
+            "M 40-44",
+            "M 45-49",
+            "M 55-59",
+            "M 65-69",
+            "M N/A",
+            "Unspecified",
+            "U 15-19",
+            "U 30-34",
+            "Relay",
+            "Relay/Team"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2002,
+      "entries": 1894,
+      "events": {
+        "iceman": {
+          "entries": 1894,
+          "finishers": 1894
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "junior": 17,
+        "unclassified": 1877
+      },
+      "raceGroupEvidence": {
+        "division": 17,
+        "unknown": 1877
+      },
+      "unclassifiedDivisions": {
+        "F 15-19": 75,
+        "F 25-29": 1,
+        "F 35-39": 86,
+        "F 45-49": 33,
+        "F 65-69": 1,
+        "F N/A": 18,
+        "M 15-19": 114,
+        "M 25-29": 157,
+        "M 30-34": 286,
+        "M 35-39": 290,
+        "M 40-44": 253,
+        "M 45-49": 278,
+        "M 55-59": 61,
+        "M 65-69": 9,
+        "M N/A": 214,
+        "U 30-34": 1
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 23695,
+          "name": "Mountain Biking - 27Miles",
+          "included": true,
+          "categoryLabels": [
+            "F 10-14",
+            "F 15-19",
+            "F 25-29",
+            "F 35-39",
+            "F 45-49",
+            "F 65-69",
+            "F N/A",
+            "M 10-14",
+            "M 15-19",
+            "M 25-29",
+            "M 30-34",
+            "M 35-39",
+            "M 40-44",
+            "M 45-49",
+            "M 55-59",
+            "M 65-69",
+            "M N/A",
+            "Unspecified",
+            "U 30-34"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2003,
+      "entries": 2032,
+      "events": {
+        "iceman": {
+          "entries": 1881,
+          "finishers": 1881
+        },
+        "slush-cup": {
+          "entries": 151,
+          "finishers": 151
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 1745,
+        "junior": 64,
+        "pro": 72,
+        "unclassified": 151
+      },
+      "raceGroupEvidence": {
+        "division": 1881,
+        "unknown": 151
+      },
+      "unclassifiedDivisions": {
+        "F 15-19": 9,
+        "F 35-39": 17,
+        "F 45-49": 18,
+        "F N/A": 17,
+        "M 15-19": 3,
+        "M 25-29": 2,
+        "M 30-34": 3,
+        "M 35-39": 9,
+        "M 45-49": 15,
+        "M N/A": 58
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 216181,
+          "name": "Slush Men/45+ - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 45-49"
+          ]
+        },
+        {
+          "id": 216180,
+          "name": "Slush Men/35-44 - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 35-39"
+          ]
+        },
+        {
+          "id": 216179,
+          "name": "Slush Men/30-34 - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 30-34"
+          ]
+        },
+        {
+          "id": 216178,
+          "name": "Slush Men/25-29 - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 25-29"
+          ]
+        },
+        {
+          "id": 216177,
+          "name": "Slush Men/19-24 - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 15-19"
+          ]
+        },
+        {
+          "id": 216176,
+          "name": "Slush Women/45+ - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "F 45-49"
+          ]
+        },
+        {
+          "id": 216175,
+          "name": "Slush Women/35-44 - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "F 35-39"
+          ]
+        },
+        {
+          "id": 216174,
+          "name": "Slush Women/19-34 - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "F 15-19"
+          ]
+        },
+        {
+          "id": 216173,
+          "name": "Slush Men/16&Under - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "M N/A"
+          ]
+        },
+        {
+          "id": 216172,
+          "name": "Slush Women/16&Under - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "F N/A"
+          ]
+        },
+        {
+          "id": 216171,
+          "name": "Slush Men/14&Under - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "M N/A"
+          ]
+        },
+        {
+          "id": 216170,
+          "name": "Slush Women/14&Under - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "F N/A"
+          ]
+        },
+        {
+          "id": 216167,
+          "name": "Slush Men/12&Under - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "M N/A"
+          ]
+        },
+        {
+          "id": 216166,
+          "name": "Slush Women/12&Under - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "F N/A"
+          ]
+        },
+        {
+          "id": 216165,
+          "name": "Slush Men/10&Under - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "M N/A"
+          ]
+        },
+        {
+          "id": 216164,
+          "name": "Beginner Tandems - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "Relay/Team",
+            "Relay"
+          ]
+        },
+        {
+          "id": 216163,
+          "name": "Beginner Clydesdales - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M N/A"
+          ]
+        },
+        {
+          "id": 216162,
+          "name": "Beginner Women 45+ - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "F 45-49"
+          ]
+        },
+        {
+          "id": 216161,
+          "name": "Beginner Women 35-44 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "F 35-39"
+          ]
+        },
+        {
+          "id": 216160,
+          "name": "Beginner Women 19-34 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "F 15-19"
+          ]
+        },
+        {
+          "id": 216159,
+          "name": "All Women 12-18 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "F 10-14"
+          ]
+        },
+        {
+          "id": 216158,
+          "name": "Beginner Men 45-54 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 45-49"
+          ]
+        },
+        {
+          "id": 216157,
+          "name": "Beginner Men 40-44 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 40-44"
+          ]
+        },
+        {
+          "id": 216156,
+          "name": "Beginner Men 35-39 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 35-39"
+          ]
+        },
+        {
+          "id": 216155,
+          "name": "Beginner Men 30-34 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 30-34"
+          ]
+        },
+        {
+          "id": 216154,
+          "name": "Beginner Men 25-29 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 25-29"
+          ]
+        },
+        {
+          "id": 216153,
+          "name": "Beginner Men 19-24 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 15-19"
+          ]
+        },
+        {
+          "id": 216152,
+          "name": "Beginner Men 15-18 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 15-19"
+          ]
+        },
+        {
+          "id": 216151,
+          "name": "All Men 12-14 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 10-14"
+          ]
+        },
+        {
+          "id": 216150,
+          "name": "Sport/Exp Women 45+ - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "F 45-49"
+          ]
+        },
+        {
+          "id": 216149,
+          "name": "Sport Women 35-44 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "F 35-39"
+          ]
+        },
+        {
+          "id": 216147,
+          "name": "Sport Women 19-34 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "F 15-19"
+          ]
+        },
+        {
+          "id": 216146,
+          "name": "All Men 65+ - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 65-69"
+          ]
+        },
+        {
+          "id": 216145,
+          "name": "All Men 55-64 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 55-59"
+          ]
+        },
+        {
+          "id": 216144,
+          "name": "Sport Men 45-54 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 45-49"
+          ]
+        },
+        {
+          "id": 216143,
+          "name": "Sport Men 40-44 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 40-44"
+          ]
+        },
+        {
+          "id": 216142,
+          "name": "Sport Men 35-39 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 35-39"
+          ]
+        },
+        {
+          "id": 216141,
+          "name": "Sport Men 30-34 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 30-34"
+          ]
+        },
+        {
+          "id": 216140,
+          "name": "Sport Men 25-29 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 25-29"
+          ]
+        },
+        {
+          "id": 216139,
+          "name": "Sport Men 19-24 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 15-19"
+          ]
+        },
+        {
+          "id": 216138,
+          "name": "Sport Men 15-18 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 15-19"
+          ]
+        },
+        {
+          "id": 216137,
+          "name": "Single Speed - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "Unspecified",
+            "U 25-29",
+            "U N/A"
+          ]
+        },
+        {
+          "id": 216136,
+          "name": "Big Kneed Gals - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "F N/A"
+          ]
+        },
+        {
+          "id": 216135,
+          "name": "Sport/Exp Clydesdales - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 40-44",
+            "M N/A"
+          ]
+        },
+        {
+          "id": 216134,
+          "name": "Sport/Exp Tandems - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "Relay/Team",
+            "Relay"
+          ]
+        },
+        {
+          "id": 216133,
+          "name": "Expert Men 45-54 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 45-49"
+          ]
+        },
+        {
+          "id": 216132,
+          "name": "Expert Men 40-44 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 40-44"
+          ]
+        },
+        {
+          "id": 216131,
+          "name": "Expert Men 35-39 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 35-39"
+          ]
+        },
+        {
+          "id": 216130,
+          "name": "Expert Men 30-34 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 30-34"
+          ]
+        },
+        {
+          "id": 216129,
+          "name": "Expert Men 25-29 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 25-29"
+          ]
+        },
+        {
+          "id": 216127,
+          "name": "Expert Men 19-24 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 15-19"
+          ]
+        },
+        {
+          "id": 216126,
+          "name": "Expert Men 15-18 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M 15-19"
+          ]
+        },
+        {
+          "id": 216125,
+          "name": "Expert Women 35-44 - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "F 35-39"
+          ]
+        },
+        {
+          "id": 216124,
+          "name": "Pro/Expert Women - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "F N/A"
+          ]
+        },
+        {
+          "id": 167545,
+          "name": "Slush Women/10&Under - 8Mile",
+          "included": true,
+          "categoryLabels": [
+            "F N/A"
+          ]
+        },
+        {
+          "id": 23669,
+          "name": "Pro/Expert Men - 27Mile",
+          "included": true,
+          "categoryLabels": [
+            "M N/A"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2004,
+      "entries": 1697,
+      "events": {
+        "iceman": {
+          "entries": 1697,
+          "finishers": 1697
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "junior": 14,
+        "unclassified": 1683
+      },
+      "raceGroupEvidence": {
+        "division": 14,
+        "unknown": 1683
+      },
+      "unclassifiedDivisions": {
+        "F 15-19": 62,
+        "F 25-29": 1,
+        "F 35-39": 59,
+        "F 45-49": 32,
+        "F 55-59": 3,
+        "F N/A": 31,
+        "M 15-19": 98,
+        "M 25-29": 97,
+        "M 30-34": 258,
+        "M 35-39": 275,
+        "M 40-44": 283,
+        "M 45-49": 276,
+        "M 50-54": 59,
+        "M 55-59": 91,
+        "M 65-69": 12,
+        "M N/A": 45,
+        "U 35-39": 1
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 19142,
+          "name": "Mountain Biking - 27Miles",
+          "included": true,
+          "categoryLabels": [
+            "F 10-14",
+            "F 15-19",
+            "F 25-29",
+            "F 35-39",
+            "F 45-49",
+            "F 55-59",
+            "F N/A",
+            "M 10-14",
+            "M 15-19",
+            "M 25-29",
+            "M 30-34",
+            "M 35-39",
+            "M 40-44",
+            "M 45-49",
+            "M 50-54",
+            "M 55-59",
+            "M 65-69",
+            "M N/A",
+            "Unspecified",
+            "U 35-39"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2005,
+      "entries": 1989,
+      "events": {
+        "iceman": {
+          "entries": 1989,
+          "finishers": 1989
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "junior": 14,
+        "unclassified": 1975
+      },
+      "raceGroupEvidence": {
+        "division": 14,
+        "unknown": 1975
+      },
+      "unclassifiedDivisions": {
+        "F 15-19": 75,
+        "F 25-29": 1,
+        "F 35-39": 80,
+        "F 40-44": 1,
+        "F 45-49": 34,
+        "F 55-59": 1,
+        "F N/A": 17,
+        "M 15-19": 101,
+        "M 25-29": 104,
+        "M 30-34": 236,
+        "M 35-39": 321,
+        "M 40-44": 274,
+        "M 45-49": 307,
+        "M 50-54": 78,
+        "M 55-59": 99,
+        "M 65-69": 11,
+        "M N/A": 234,
+        "U 35-39": 1
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 23668,
+          "name": "Mountain Biking - 27Miles",
+          "included": true,
+          "categoryLabels": [
+            "F 10-14",
+            "F 15-19",
+            "F 25-29",
+            "F 35-39",
+            "F 40-44",
+            "F 45-49",
+            "F 55-59",
+            "F N/A",
+            "M 10-14",
+            "M 15-19",
+            "M 25-29",
+            "M 30-34",
+            "M 35-39",
+            "M 40-44",
+            "M 45-49",
+            "M 50-54",
+            "M 55-59",
+            "M 65-69",
+            "M N/A",
+            "Unspecified",
+            "U 35-39"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2006,
+      "entries": 1920,
+      "events": {
+        "iceman": {
+          "entries": 1920,
+          "finishers": 1920
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "junior": 19,
+        "unclassified": 1901
+      },
+      "raceGroupEvidence": {
+        "division": 19,
+        "unknown": 1901
+      },
+      "unclassifiedDivisions": {
+        "F 15-19": 50,
+        "F 35-39": 57,
+        "F 45-49": 39,
+        "F 55-59": 8,
+        "F N/A": 23,
+        "M 15-19": 107,
+        "M 25-29": 90,
+        "M 30-34": 188,
+        "M 35-39": 304,
+        "M 40-44": 278,
+        "M 45-49": 297,
+        "M 50-54": 74,
+        "M 55-59": 105,
+        "M 65-69": 11,
+        "M N/A": 269,
+        "U 35-39": 1
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 23664,
+          "name": "Mountain Biking - 27Miles",
+          "included": true,
+          "categoryLabels": [
+            "F 10-14",
+            "F 15-19",
+            "F 35-39",
+            "F 45-49",
+            "F 55-59",
+            "F N/A",
+            "M 10-14",
+            "M 15-19",
+            "M 25-29",
+            "M 30-34",
+            "M 35-39",
+            "M 40-44",
+            "M 45-49",
+            "M 50-54",
+            "M 55-59",
+            "M 65-69",
+            "M N/A",
+            "Unspecified",
+            "U 35-39"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2007,
+      "entries": 2100,
+      "events": {
+        "iceman": {
+          "entries": 2100,
+          "finishers": 2100
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 1809,
+        "junior": 12,
+        "pro": 52,
+        "unclassified": 227
+      },
+      "raceGroupEvidence": {
+        "division": 1873,
+        "unknown": 227
+      },
+      "unclassifiedDivisions": {
+        "F 15-19": 38,
+        "F 25-29": 3,
+        "F 35-39": 52,
+        "F 45-49": 22,
+        "F 55-59": 11,
+        "F BEG": 64,
+        "F CLY": 4,
+        "F N/A": 33
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 64074,
+          "name": "Mountain Bike - 27Mi Women",
+          "included": true,
+          "categoryLabels": [
+            "F 10-14",
+            "F 15-19",
+            "F 25-29",
+            "F 35-39",
+            "F 45-49",
+            "F 55-59",
+            "F N/A",
+            "F BEG",
+            "F CLY"
+          ]
+        },
+        {
+          "id": 64069,
+          "name": "Mountain Bike - 27Mi Men",
+          "included": true,
+          "categoryLabels": [
+            "M 10-14",
+            "M 15-19",
+            "M 20-24",
+            "M 25-29",
+            "M 30-34",
+            "M 35-39",
+            "M 40-44",
+            "M 45-49",
+            "M 50-54",
+            "M 55-59",
+            "M 65-69",
+            "M N/A",
+            "M PRO",
+            "M BEG",
+            "M CLY"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2008,
+      "entries": 2206,
+      "events": {
+        "iceman": {
+          "entries": 2206,
+          "finishers": 2206
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 1825,
+        "junior": 57,
+        "pro": 58,
+        "unclassified": 266
+      },
+      "raceGroupEvidence": {
+        "division": 4,
+        "metadata:0": 1936,
+        "unknown": 266
+      },
+      "unclassifiedDivisions": {
+        "F 15-19": 69,
+        "F 25-29": 1,
+        "F 30-34": 2,
+        "F 35-39": 75,
+        "F 45-49": 48,
+        "F 55-59": 5,
+        "F N/A": 40,
+        "M 25-29": 1,
+        "M 30-34": 7,
+        "M 35-39": 2,
+        "M 40-44": 6,
+        "M 45-49": 2,
+        "M 60-64": 1,
+        "M N/A": 6,
+        "U 30-34": 1
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 108935,
+          "name": "Mountain Bike- 27Mi",
+          "included": true,
+          "categoryLabels": [
+            "F 10-14",
+            "F 15-19",
+            "F 25-29",
+            "F 30-34",
+            "F 35-39",
+            "F 45-49",
+            "F 55-59",
+            "F N/A",
+            "M 10-14",
+            "M 15-19",
+            "M 25-29",
+            "M 30-34",
+            "M 35-39",
+            "M 40-44",
+            "M 45-49",
+            "M 50-54",
+            "M 55-59",
+            "M 60-64",
+            "M 65-69",
+            "M N/A",
+            "Unspecified",
+            "U 30-34"
+          ]
+        }
+      ],
+      "metadataSources": [
+        {
+          "format": "runmichigan",
+          "path": "raw/runmichigan-results.html",
+          "sourceUrl": "https://www.runmichigan.com/results/full.php/2008/11/08/iceman-cometh-challenge-2.html"
+        }
+      ],
+      "metadataCoverage": [
+        {
+          "source": "metadata:0",
+          "rows": 1953,
+          "matched": 1936,
+          "unmatched": 17
+        }
+      ]
+    },
+    {
+      "year": 2009,
+      "entries": 3137,
+      "events": {
+        "iceman": {
+          "entries": 3137,
+          "finishers": 3137
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "junior": 75,
+        "unclassified": 3062
+      },
+      "raceGroupEvidence": {
+        "division": 75,
+        "unknown": 3062
+      },
+      "unclassifiedDivisions": {
+        "F 15-19": 9,
+        "F 20-24": 19,
+        "F 25-29": 27,
+        "F 30-34": 55,
+        "F 35-39": 67,
+        "F 40-44": 62,
+        "F 45-49": 48,
+        "F 50-54": 35,
+        "F 55-59": 10,
+        "F 60-64": 1,
+        "M 15-19": 61,
+        "M 20-24": 101,
+        "M 25-29": 193,
+        "M 30-34": 318,
+        "M 35-39": 534,
+        "M 40-44": 550,
+        "M 45-49": 444,
+        "M 50-54": 287,
+        "M 55-59": 130,
+        "M 60-64": 74,
+        "M 65-69": 20,
+        "M 70-74": 6,
+        "M N/A": 9,
+        "U 40-44": 1,
+        "U 55-59": 1
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 120192,
+          "name": "Mountain Bike 27Mi",
+          "included": true,
+          "categoryLabels": [
+            "F 10-14",
+            "F 15-19",
+            "F 20-24",
+            "F 25-29",
+            "F 30-34",
+            "F 35-39",
+            "F 40-44",
+            "F 45-49",
+            "F 50-54",
+            "F 55-59",
+            "F 60-64",
+            "M 7-9",
+            "M 10-14",
+            "M 15-19",
+            "M 20-24",
+            "M 25-29",
+            "M 30-34",
+            "M 35-39",
+            "M 40-44",
+            "M 45-49",
+            "M 50-54",
+            "M 55-59",
+            "M 60-64",
+            "M 65-69",
+            "M N/A",
+            "M 70-74",
+            "Unspecified",
+            "U 40-44",
+            "U 55-59"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2010,
+      "entries": 3300,
+      "events": {
+        "iceman": {
+          "entries": 3300,
+          "finishers": 3300
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 2618,
+        "junior": 72,
+        "pro": 89,
+        "unclassified": 521
+      },
+      "raceGroupEvidence": {
+        "division": 3,
+        "metadata:0": 2776,
+        "unknown": 521
+      },
+      "unclassifiedDivisions": {
+        "": 30,
+        "F 15-19": 4,
+        "F 20-24": 16,
+        "F 25-29": 26,
+        "F 30-34": 43,
+        "F 35-39": 71,
+        "F 40-44": 59,
+        "F 45-49": 59,
+        "F 50-54": 39,
+        "F 55-59": 14,
+        "F 60-64": 3,
+        "F N/A": 2,
+        "M 20-24": 1,
+        "M 30-34": 1,
+        "M 35-39": 13,
+        "M 40-44": 123,
+        "M 45-49": 8,
+        "M 50-54": 2,
+        "M 55-59": 5,
+        "M 60-64": 1,
+        "M N/A": 1
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 201612,
+          "name": "Mountain Bike 27Mi",
+          "included": true,
+          "categoryLabels": [
+            "F 10-14",
+            "F 15-19",
+            "F 20-24",
+            "F 25-29",
+            "F 30-34",
+            "F 35-39",
+            "F 40-44",
+            "F 45-49",
+            "F 50-54",
+            "F 55-59",
+            "F 60-64",
+            "F N/A",
+            "M 10-14",
+            "M 15-19",
+            "M 20-24",
+            "M 25-29",
+            "M 30-34",
+            "M 35-39",
+            "M 40-44",
+            "M 45-49",
+            "M 50-54",
+            "M 55-59",
+            "M 60-64",
+            "M 65-69",
+            "M N/A",
+            "M 70-74",
+            "Relay",
+            "Relay/Team"
+          ]
+        }
+      ],
+      "metadataSources": [
+        {
+          "format": "runmichigan",
+          "path": "raw/runmichigan-results.html",
+          "sourceUrl": "https://www.runmichigan.com/results/full.php/2010/11/06/iceman-cometh-challenge-3.html"
+        }
+      ],
+      "metadataCoverage": [
+        {
+          "source": "metadata:0",
+          "rows": 2947,
+          "matched": 2776,
+          "unmatched": 171
+        }
+      ]
+    },
+    {
+      "year": 2011,
+      "entries": 3512,
+      "events": {
+        "iceman": {
+          "entries": 3512,
+          "finishers": 3512
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 3368,
+        "junior": 19,
+        "pro": 125
+      },
+      "raceGroupEvidence": {
+        "division": 3512
+      },
+      "unclassifiedDivisions": {},
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 269955,
+          "name": "Mountain Bike-28Mi",
+          "included": true,
+          "categoryLabels": [
+            "F 10-14",
+            "F 15-19",
+            "F 20-24",
+            "F 25-29",
+            "F 30-34",
+            "F 35-39",
+            "F 40-44",
+            "F 45-49",
+            "F 50-54",
+            "F 55-59",
+            "F 60-64",
+            "F 65-69",
+            "F PRO",
+            "F CLY",
+            "M 10-14",
+            "M 15-19",
+            "M 20-24",
+            "M 25-29",
+            "M 30-34",
+            "M 35-39",
+            "M 40-44",
+            "M 45-49",
+            "M 50-54",
+            "M 55-59",
+            "M 60-64",
+            "M 65-69",
+            "M 70-74",
+            "M 75-79",
+            "M 80-84",
+            "M PRO",
+            "M CLY"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2012,
+      "entries": 4158,
+      "events": {
+        "iceman": {
+          "entries": 3877,
+          "finishers": 3877
+        },
+        "slush-cup": {
+          "entries": 281,
+          "finishers": 281
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 3732,
+        "junior": 97,
+        "pro": 117,
+        "unclassified": 212
+      },
+      "raceGroupEvidence": {
+        "division": 3946,
+        "unknown": 212
+      },
+      "unclassifiedDivisions": {
+        "F 15-19": 38,
+        "F 35-39": 35,
+        "F 45-49": 29,
+        "F 55-59": 4,
+        "F U6": 6,
+        "M 15-19": 42,
+        "M 45-49": 25,
+        "M U6": 33
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 340673,
+          "name": "Tandem  \tSlush Cup 8 miles",
+          "included": false,
+          "categoryLabels": [
+            "F N/A",
+            "M N/A"
+          ]
+        },
+        {
+          "id": 340671,
+          "name": "Slush Cup 8 miles",
+          "included": true,
+          "categoryLabels": [
+            "F U6",
+            "F 10-14",
+            "F 15-19",
+            "F 35-39",
+            "F 45-49",
+            "F 55-59",
+            "M U6",
+            "M 10-14",
+            "M 15-19",
+            "M 45-49"
+          ]
+        },
+        {
+          "id": 332413,
+          "name": "Tandem Mountain Bike-29Mi",
+          "included": false,
+          "categoryLabels": [
+            "Relay/Team",
+            "Relay"
+          ]
+        },
+        {
+          "id": 330212,
+          "name": "Mountain Bike-29Mi ",
+          "included": true,
+          "categoryLabels": [
+            "F 7-9",
+            "F 10-14",
+            "F 15-19",
+            "F 20-24",
+            "F 25-29",
+            "F 30-34",
+            "F 35-39",
+            "F 40-44",
+            "F 45-49",
+            "F 50-54",
+            "F 55-59",
+            "F 60-64",
+            "F 65-69",
+            "F N/A",
+            "F PRO",
+            "F CLY",
+            "M 10-14",
+            "M 15-19",
+            "M 20-24",
+            "M 25-29",
+            "M 30-34",
+            "M 35-39",
+            "M 40-44",
+            "M 45-49",
+            "M 50-54",
+            "M 55-59",
+            "M 60-64",
+            "M 65-69",
+            "M N/A",
+            "M 70-74",
+            "M 75-79",
+            "M PRO",
+            "M CLY"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2013,
+      "entries": 4291,
+      "events": {
+        "iceman": {
+          "entries": 3975,
+          "finishers": 3975
+        },
+        "slush-cup": {
+          "entries": 316,
+          "finishers": 316
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "junior": 167,
+        "unclassified": 4124
+      },
+      "raceGroupEvidence": {
+        "division": 167,
+        "unknown": 4124
+      },
+      "unclassifiedDivisions": {
+        "F 15-19": 28,
+        "F 20-24": 22,
+        "F 25-29": 33,
+        "F 30-34": 76,
+        "F 35-39": 87,
+        "F 40-44": 90,
+        "F 45-49": 80,
+        "F 50-54": 49,
+        "F 55-59": 27,
+        "F 60-64": 10,
+        "F 65-69": 1,
+        "F N/A": 1,
+        "F U6": 1,
+        "M 15-19": 92,
+        "M 20-24": 117,
+        "M 25-29": 235,
+        "M 30-34": 384,
+        "M 35-39": 584,
+        "M 40-44": 706,
+        "M 45-49": 614,
+        "M 50-54": 446,
+        "M 55-59": 249,
+        "M 60-64": 115,
+        "M 65-69": 38,
+        "M 70-74": 9,
+        "M 80-84": 1,
+        "M N/A": 5,
+        "M U6": 1,
+        "U 10-14": 2,
+        "U 20-24": 1,
+        "U 30-34": 1,
+        "U 35-39": 1,
+        "U 40-44": 2,
+        "U 45-49": 12,
+        "U 50-54": 2,
+        "U 55-59": 2
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 371229,
+          "name": "8 Mile Slush Cup",
+          "included": true,
+          "categoryLabels": [
+            "F U6",
+            "F 7-9",
+            "F 10-14",
+            "F 15-19",
+            "F 20-24",
+            "F 25-29",
+            "F 30-34",
+            "F 35-39",
+            "F 40-44",
+            "F 45-49",
+            "F 50-54",
+            "F 55-59",
+            "F 60-64",
+            "M U6",
+            "M 7-9",
+            "M 10-14",
+            "M 15-19",
+            "M 20-24",
+            "M 30-34",
+            "M 35-39",
+            "M 40-44",
+            "M 45-49",
+            "M 50-54",
+            "M 55-59",
+            "M 60-64",
+            "M 65-69",
+            "M N/A",
+            "M 80-84"
+          ]
+        },
+        {
+          "id": 371227,
+          "name": "29 Mile Mountain Bike",
+          "included": true,
+          "categoryLabels": [
+            "F 10-14",
+            "F 15-19",
+            "F 20-24",
+            "F 25-29",
+            "F 30-34",
+            "F 35-39",
+            "F 40-44",
+            "F 45-49",
+            "F 50-54",
+            "F 55-59",
+            "F 60-64",
+            "F 65-69",
+            "F N/A",
+            "M 10-14",
+            "M 15-19",
+            "M 20-24",
+            "M 25-29",
+            "M 30-34",
+            "M 35-39",
+            "M 40-44",
+            "M 45-49",
+            "M 50-54",
+            "M 55-59",
+            "M 60-64",
+            "M 65-69",
+            "M N/A",
+            "M 70-74",
+            "Unspecified",
+            "U 10-14",
+            "U 20-24",
+            "U 30-34",
+            "U 35-39",
+            "U 40-44",
+            "U 45-49",
+            "U 50-54",
+            "U 55-59"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2014,
+      "entries": 3292,
+      "events": {
+        "iceman": {
+          "entries": 3292,
+          "finishers": 3292
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 3172,
+        "pro": 120
+      },
+      "raceGroupEvidence": {
+        "division": 3292
+      },
+      "unclassifiedDivisions": {},
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 670281,
+          "name": "29 Mile Mountain Bike Singlespeed",
+          "included": false,
+          "categoryLabels": [
+            "F Singlespeed",
+            "M Singlespeed 01-39",
+            "M Singlespeed 40-99"
+          ]
+        },
+        {
+          "id": 482194,
+          "name": "MYC Scholoarship",
+          "included": false,
+          "categoryLabels": [
+            "M 15-16",
+            "M 17-18",
+            "F MYC SCHOLOARSHIP 09-14",
+            "M MYC SCHOLOARSHIP 09-14"
+          ]
+        },
+        {
+          "id": 482191,
+          "name": "29 Mile Mountain Bike Tandem",
+          "included": false,
+          "categoryLabels": [
+            "Relay",
+            "TANDEM"
+          ]
+        },
+        {
+          "id": 476614,
+          "name": "29 Mile Mountain Bike",
+          "included": true,
+          "categoryLabels": [
+            "F 19-24",
+            "F 25-29",
+            "F 30-34",
+            "F 35-39",
+            "F 40-44",
+            "F 45-49",
+            "F 50-54",
+            "F 55-59",
+            "F 60-99",
+            "M 19-24",
+            "M 25-27",
+            "M 28-29",
+            "M 30-31",
+            "M 32-33",
+            "M 34-34",
+            "M 35-35",
+            "M 36-36",
+            "M 37-37",
+            "M 38-38",
+            "M 39-39",
+            "M 40-44",
+            "M 41-41",
+            "M 42-42",
+            "M 43-43",
+            "M 44-44",
+            "M 45-49",
+            "M 46-46",
+            "M 47-47",
+            "M 48-48",
+            "M 49-49",
+            "M 50-50",
+            "M 51-51",
+            "M 52-52",
+            "M 53-53",
+            "M 54-54",
+            "M 55-55",
+            "M 56-57",
+            "M 58-59",
+            "M 60-64",
+            "M 65-69",
+            "M 70-99",
+            "ICEBIKE WOMEN",
+            "F ATH",
+            "F PAT & CAT 1",
+            "ICEBIKE MEN",
+            "M CLY",
+            "M PRO & CAT 1"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2015,
+      "entries": 3624,
+      "events": {
+        "iceman": {
+          "entries": 3624,
+          "finishers": 3624
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 3475,
+        "junior": 55,
+        "pro": 94
+      },
+      "raceGroupEvidence": {
+        "division": 3624
+      },
+      "unclassifiedDivisions": {},
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 739464,
+          "name": "30.1 Mi Mountain Bike Tandem",
+          "included": false,
+          "categoryLabels": [
+            "Relay",
+            "TANDEM"
+          ]
+        },
+        {
+          "id": 619663,
+          "name": "30.1 Mi Mountain Bike",
+          "included": true,
+          "categoryLabels": [
+            "M 15-16",
+            "M 17-18",
+            "M 60-64",
+            "M 65-69",
+            "F Pro & Cat 1",
+            "Women 45-49",
+            "Women 40-44",
+            "Women 30-34",
+            "Women 35-39",
+            "Women 50-54",
+            "F Fat Bike",
+            "Women 55-59",
+            "F MYC Scholarship 9-14",
+            "Women 25-29",
+            "Women 19-24",
+            "F Clydesdale",
+            "F Singlespeeds",
+            "Women 60-99",
+            "M Pro & Cat 1",
+            "Men 44",
+            "Men 55",
+            "Men 25-27",
+            "Men 36",
+            "Men 28-29",
+            "Men 50",
+            "Men 49",
+            "M Singlespeeds 1-39",
+            "Men 56-57",
+            "M Singlespeeds 40-99",
+            "Men 34",
+            "Men 32-33",
+            "M Fat Bike",
+            "Men 47",
+            "Men 39",
+            "Men 43",
+            "Men 41",
+            "Men 30-31",
+            "Men 42",
+            "Men 54",
+            "Men 40",
+            "Men 58-59",
+            "Men 45",
+            "Men 46",
+            "Men 51",
+            "Men 35",
+            "Men 19-24",
+            "Men 37",
+            "Men 38",
+            "Men 48",
+            "Men 52",
+            "Men 53",
+            "M CLY",
+            "M MYC Scholarship 9-14",
+            "Men 70-99"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2016,
+      "entries": 3854,
+      "events": {
+        "iceman": {
+          "entries": 3854,
+          "finishers": 3854
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 3680,
+        "junior": 74,
+        "pro": 100
+      },
+      "raceGroupEvidence": {
+        "division": 3854
+      },
+      "unclassifiedDivisions": {},
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 906581,
+          "name": "30 Mile Mountain Bike",
+          "included": true,
+          "categoryLabels": [
+            "F 15-16",
+            "F 17-18",
+            "F 25-29",
+            "F 30-34",
+            "F 35-39",
+            "F 40-44",
+            "F 45-49",
+            "F 50-54",
+            "F 55-59",
+            "M 15-16",
+            "M 17-18",
+            "M 60-64",
+            "M 65-69",
+            "F Pro & Cat 1",
+            "F 19-24",
+            "F Fat Bike",
+            "F Singlespeeds",
+            "F Clydesdale",
+            "F 60-99",
+            "F 09-14 Juniors",
+            "M Pro & Cat 1",
+            "M 56-57",
+            "M 42-42",
+            "M 19-24",
+            "M 32-33",
+            "M 25-27",
+            "M 35-35",
+            "M 01-39 Fat Bike",
+            "M 51-51",
+            "M 36-36",
+            "M 37-37",
+            "M 28-29",
+            "M 01-39 Singlespeeds",
+            "M 49-49",
+            "M 40-40",
+            "M 41-41",
+            "M 30-31",
+            "M 50-50",
+            "M 44-44",
+            "M 54-54",
+            "M 43-43",
+            "M 46-46",
+            "M 52-52",
+            "M 58-59",
+            "M 47-47",
+            "M 40-99 Singlespeeds",
+            "M 40-99 Fat Bike",
+            "M 39-39",
+            "M 38-38",
+            "M 55-55",
+            "M 45-45",
+            "M 40-99 Clydesdales",
+            "M 48-48",
+            "M 53-53",
+            "M 34-34",
+            "M 01-39 Clydesdales",
+            "M 70-99",
+            "M 09-14 Juniors"
+          ]
+        },
+        {
+          "id": 902825,
+          "name": "30 Mile Mountain Bike Tandem",
+          "included": false,
+          "categoryLabels": [
+            "Relay",
+            "Tandem"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2017,
+      "entries": 4030,
+      "events": {
+        "iceman": {
+          "entries": 3679,
+          "finishers": 3610
+        },
+        "slush-cup": {
+          "entries": 351,
+          "finishers": 351
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 3484,
+        "junior": 278,
+        "pro": 97,
+        "unclassified": 171
+      },
+      "raceGroupEvidence": {
+        "division": 3859,
+        "unknown": 171
+      },
+      "unclassifiedDivisions": {
+        "Men 19-44": 32,
+        "Men 30-31": 1,
+        "Men 38": 1,
+        "Men 40": 1,
+        "Men 45-54": 22,
+        "Men 55+": 24,
+        "Tandem": 4,
+        "Women 19-34": 14,
+        "Women 35-44": 27,
+        "Women 40-44": 1,
+        "Women 45-54": 31,
+        "Women 55+": 13
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 1104824,
+          "name": "Iceman",
+          "included": true,
+          "categoryLabels": [
+            "Fat Bike Men 39 and under",
+            "Fat Bike Men 40-49",
+            "Fat Bike Men 50+",
+            "Fat Bike Women",
+            "Juniors Men 15-16",
+            "Juniors Men 17-18",
+            "Juniors Men 9-14",
+            "Juniors Women 15-16",
+            "Juniors Women 17-18",
+            "Juniors Women 9-14",
+            "Lady Clydesdale",
+            "Lady Singlespeeds",
+            "Men 19-24",
+            "Men 25-27",
+            "Men 28-29",
+            "Men 30-31",
+            "Men 32-33",
+            "Men 34",
+            "Men 35",
+            "Men 36",
+            "Men 37",
+            "Men 38",
+            "Men 39",
+            "Men 40",
+            "Men 41",
+            "Men 42",
+            "Men 43",
+            "Men 44",
+            "Men 45",
+            "Men 46",
+            "Men 47",
+            "Men 48",
+            "Men 49",
+            "Men 50",
+            "Men 51",
+            "Men 52",
+            "Men 53",
+            "Men 54",
+            "Men 55",
+            "Men 56-57",
+            "Men 58-59",
+            "Men 60-64",
+            "Men 65-69",
+            "Men 70+",
+            "Men Clydesdale 39 and under",
+            "Men Clydesdales 40+",
+            "Men Singlespeed 39 and under",
+            "Men Singlespeed 40+",
+            "Pro Cat 1 Men",
+            "Pro Cat 1 Women",
+            "Tandem",
+            "Women 19-24",
+            "Women 25-29",
+            "Women 35-39",
+            "Women 40-44",
+            "Women 45-49",
+            "Women 50-54",
+            "Women 55-59",
+            "Women 60+",
+            "Women 30-34"
+          ]
+        },
+        {
+          "id": 1104825,
+          "name": "Slush Cup",
+          "included": true,
+          "categoryLabels": [
+            "Men 10 and under",
+            "Men 11-12",
+            "Men 13-14",
+            "Men 15-16",
+            "Men 17-18",
+            "Men 19-44",
+            "Men 45-54",
+            "Men 55+",
+            "Tandem",
+            "Women 10 and under",
+            "Women 11-12",
+            "Women 13-14",
+            "Women 15-16",
+            "Women 17-18",
+            "Women 19-34",
+            "Women 45-54",
+            "Women 55+",
+            "Women 35-44"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2018,
+      "entries": 4251,
+      "events": {
+        "iceman": {
+          "entries": 3848,
+          "finishers": 3796
+        },
+        "slush-cup": {
+          "entries": 403,
+          "finishers": 403
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 3645,
+        "junior": 317,
+        "pro": 94,
+        "unclassified": 195
+      },
+      "raceGroupEvidence": {
+        "division": 4056,
+        "unknown": 195
+      },
+      "unclassifiedDivisions": {
+        "Fat Bike Men 50+": 1,
+        "Men 19-24": 1,
+        "Men 19-44": 30,
+        "Men 28-29": 1,
+        "Men 32-33": 1,
+        "Men 39": 1,
+        "Men 45-54": 21,
+        "Men 48": 2,
+        "Men 51": 1,
+        "Men 52": 1,
+        "Men 55+": 31,
+        "Men Clydesdales 40+": 1,
+        "Tandem": 3,
+        "Women 19-34": 17,
+        "Women 35-44": 22,
+        "Women 45-49": 1,
+        "Women 45-54": 39,
+        "Women 55+": 21
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 1446930,
+          "name": "Iceman",
+          "included": true,
+          "categoryLabels": [
+            "Fat Bike Men 39 and under",
+            "Fat Bike Men 40-49",
+            "Fat Bike Men 50+",
+            "Fat Bike Women",
+            "Juniors Men 15-16",
+            "Juniors Men 17-18",
+            "Juniors Men 9-14",
+            "Juniors Women 15-16",
+            "Juniors Women 17-18",
+            "Juniors Women 9-14",
+            "Lady Clydesdale",
+            "Lady Singlespeeds",
+            "Men 19-24",
+            "Men 25-27",
+            "Men 28-29",
+            "Men 30-31",
+            "Men 32-33",
+            "Men 34",
+            "Men 35",
+            "Men 36",
+            "Men 37",
+            "Men 38",
+            "Men 39",
+            "Men 40",
+            "Men 41",
+            "Men 42",
+            "Men 43",
+            "Men 44",
+            "Men 45",
+            "Men 46",
+            "Men 47",
+            "Men 48",
+            "Men 49",
+            "Men 50",
+            "Men 51",
+            "Men 52",
+            "Men 53",
+            "Men 54",
+            "Men 55",
+            "Men 56-57",
+            "Men 58-59",
+            "Men 60-64",
+            "Men 65-69",
+            "Men 70+",
+            "Men Clydesdale 39 and under",
+            "Men Clydesdales 40+",
+            "Men Singlespeed 39 and under",
+            "Men Singlespeed 40+",
+            "Pro Cat 1 Men",
+            "Pro Cat 1 Women",
+            "Tandem",
+            "Women 19-24",
+            "Women 25-29",
+            "Women 30-34",
+            "Women 35-39",
+            "Women 40-44",
+            "Women 45-49",
+            "Women 50-54",
+            "Women 55-59",
+            "Women 60-69",
+            "Women 70+"
+          ]
+        },
+        {
+          "id": 1446931,
+          "name": "Slush Cup",
+          "included": true,
+          "categoryLabels": [
+            "Men 10 and under",
+            "Men 11-12",
+            "Men 13-14",
+            "Men 15-16",
+            "Men 17-18",
+            "Men 19-44",
+            "Men 45-54",
+            "Men 55+",
+            "Tandem",
+            "Women 10 and under",
+            "Women 11-12",
+            "Women 13-14",
+            "Women 15-16",
+            "Women 17-18",
+            "Women 19-34",
+            "Women 35-44",
+            "Women 45-54",
+            "Women 55+"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2019,
+      "entries": 4384,
+      "events": {
+        "iceman": {
+          "entries": 3981,
+          "finishers": 3583
+        },
+        "slush-cup": {
+          "entries": 403,
+          "finishers": 403
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 3726,
+        "junior": 316,
+        "pro": 122,
+        "unclassified": 220
+      },
+      "raceGroupEvidence": {
+        "division": 4164,
+        "unknown": 220
+      },
+      "unclassifiedDivisions": {
+        "": 17,
+        "Men 19-24": 1,
+        "Men 19-44": 32,
+        "Men 25-27": 2,
+        "Men 37": 1,
+        "Men 38": 1,
+        "Men 45-54": 29,
+        "Men 48": 1,
+        "Men 49": 1,
+        "Men 50": 1,
+        "Men 55+": 32,
+        "Men 56-57": 2,
+        "Mens Clydesdale 40+": 1,
+        "Women 19-24": 1,
+        "Women 19-34": 13,
+        "Women 30-34": 2,
+        "Women 35-44": 34,
+        "Women 40-44": 1,
+        "Women 45-49": 1,
+        "Women 45-54": 30,
+        "Women 55+": 17
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 1716441,
+          "name": "Iceman",
+          "included": true,
+          "categoryLabels": [
+            "Fat Bike Men 39-under",
+            "Fat Bike Men 40-49",
+            "Fat Bike Men 50+",
+            "Fat Bike Women",
+            "Junior Men 15-16",
+            "Junior Men 17-18",
+            "Junior Men 9-14",
+            "Junior Women 15-16",
+            "Junior Women 17-18",
+            "Junior Women 9-14",
+            "Lady Clydesdale",
+            "Lady Single Speed",
+            "Men 19-24",
+            "Men 25-27",
+            "Men 28-29",
+            "Men 30-31",
+            "Men 32-33",
+            "Men 34",
+            "Men 35",
+            "Men 36",
+            "Men 37",
+            "Men 38",
+            "Men 39",
+            "Men 40",
+            "Men 41",
+            "Men 42",
+            "Men 43",
+            "Men 44",
+            "Men 45",
+            "Men 46",
+            "Men 47",
+            "Men 48",
+            "Men 49",
+            "Men 50",
+            "Men 51",
+            "Men 52",
+            "Men 53",
+            "Men 54",
+            "Men 55",
+            "Men 56-57",
+            "Men 58-59",
+            "Men 60-64",
+            "Men 65-69",
+            "Men 70+",
+            "Mens Clydesdale 39-under",
+            "Mens Clydesdale 40+",
+            "Mens Single Speed 39-under",
+            "Mens Single Speed 40+",
+            "Pro Cat 1 Men",
+            "Pro Cat 1 Women",
+            "Tandem",
+            "Women 19-24",
+            "Women 25-29",
+            "Women 30-34",
+            "Women 35-39",
+            "Women 40-44",
+            "Women 45-49",
+            "Women 50-54",
+            "Women 55-59",
+            "Women 60-69",
+            "Women 70+"
+          ]
+        },
+        {
+          "id": 1716442,
+          "name": "Slush Cup",
+          "included": true,
+          "categoryLabels": [
+            "Men 11-12",
+            "Men 13-14",
+            "Men 15-16",
+            "Men 17-18",
+            "Men 19-44",
+            "Men 45-54",
+            "Men 55+",
+            "Tandem",
+            "Women 11-12",
+            "Women 13-14",
+            "Women 15-16",
+            "Women 17-18",
+            "Women 19-34",
+            "Women 35-44",
+            "Women 45-54",
+            "Women 55+",
+            "Men 10-under",
+            "Women 10-under"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2021,
+      "entries": 3909,
+      "events": {
+        "iceman": {
+          "entries": 3517,
+          "finishers": 3463
+        },
+        "slush-cup": {
+          "entries": 392,
+          "finishers": 392
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 3262,
+        "junior": 355,
+        "pro": 132,
+        "unclassified": 160
+      },
+      "raceGroupEvidence": {
+        "division": 3749,
+        "unknown": 160
+      },
+      "unclassifiedDivisions": {
+        "Men 19-44": 28,
+        "Men 45-54": 18,
+        "Men 55+": 32,
+        "Tandem": 2,
+        "Women 19-44": 39,
+        "Women 45-54": 19,
+        "Women 55+": 22
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 2014695,
+          "name": "Iceman",
+          "included": true,
+          "categoryLabels": [
+            "Fat Bike Men 39-under",
+            "Fat Bike Men 40-49",
+            "Fat Bike Men 50-54",
+            "Fat Bike Men 55+",
+            "Fat Bike Women",
+            "Junior Men 15-16",
+            "Junior Men 17-18",
+            "Junior Men 9-14",
+            "Junior Women 15-16",
+            "Junior Women 17-18",
+            "Junior Women 9-14",
+            "Lady Athena",
+            "Lady Single Speed",
+            "Men 19-24",
+            "Men 25-27",
+            "Men 28-29",
+            "Men 30-31",
+            "Men 32-33",
+            "Men 34",
+            "Men 35",
+            "Men 36",
+            "Men 37",
+            "Men 38",
+            "Men 39",
+            "Men 40",
+            "Men 41",
+            "Men 42",
+            "Men 43",
+            "Men 44",
+            "Men 45",
+            "Men 46",
+            "Men 47",
+            "Men 48",
+            "Men 49",
+            "Men 50",
+            "Men 51",
+            "Men 52",
+            "Men 53",
+            "Men 54",
+            "Men 55",
+            "Men 56",
+            "Men 57",
+            "Men 58",
+            "Men 59",
+            "Men 60",
+            "Men 61",
+            "Men 62",
+            "Men 63-64",
+            "Men 65-69",
+            "Men 70+",
+            "Men Clydesdale 39-under",
+            "Men Clydesdale 40-49",
+            "Men Clydesdale 50+",
+            "Men Single Speed 39-under",
+            "Men Single Speed 40+",
+            "Pro Cat 1 Men",
+            "Pro Cat 1 Women",
+            "Tandem",
+            "Women 19-24",
+            "Women 25-29",
+            "Women 30-34",
+            "Women 35-39",
+            "Women 40-44",
+            "Women 45-49",
+            "Women 50-54",
+            "Women 55-59",
+            "Women 60-69",
+            "Women 70+"
+          ]
+        },
+        {
+          "id": 2014696,
+          "name": "Slush Cup",
+          "included": true,
+          "categoryLabels": [
+            "Men 10-under",
+            "Men 11-12",
+            "Men 13-14",
+            "Men 15-16",
+            "Men 17-18",
+            "Men 19-44",
+            "Men 45-54",
+            "Men 55+",
+            "Tandem",
+            "Women 10-under",
+            "Women 11-12",
+            "Women 13-14",
+            "Women 15-16",
+            "Women 17-18",
+            "Women 19-44",
+            "Women 45-54",
+            "Women 55+"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2022,
+      "entries": 4045,
+      "events": {
+        "iceman": {
+          "entries": 3592,
+          "finishers": 3541
+        },
+        "slush-cup": {
+          "entries": 453,
+          "finishers": 451
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 3311,
+        "junior": 402,
+        "pro": 119,
+        "unclassified": 213
+      },
+      "raceGroupEvidence": {
+        "division": 3832,
+        "unknown": 213
+      },
+      "unclassifiedDivisions": {
+        "Men 19-44": 52,
+        "Men 45-54": 29,
+        "Men 55+": 35,
+        "Tandem": 2,
+        "Women 19-44": 50,
+        "Women 45-54": 21,
+        "Women 55+": 24
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 2303606,
+          "name": "Iceman",
+          "included": true,
+          "categoryLabels": [
+            "Fat Bike Men 39-under",
+            "Fat Bike Men 40-49",
+            "Fat Bike Men 50-54",
+            "Fat Bike Men 55+",
+            "Fat Bike Women",
+            "Junior Men 15-16",
+            "Junior Men 17-18",
+            "Junior Men 9-14",
+            "Junior Women 15-16",
+            "Junior Women 17-18",
+            "Junior Women 9-14",
+            "Lady Athena",
+            "Lady Single Speed",
+            "Men 19-24",
+            "Men 25-27",
+            "Men 28-29",
+            "Men 30-31",
+            "Men 32-33",
+            "Men 34",
+            "Men 35",
+            "Men 36",
+            "Men 37",
+            "Men 38",
+            "Men 39",
+            "Men 40",
+            "Men 41",
+            "Men 42",
+            "Men 43",
+            "Men 44",
+            "Men 45",
+            "Men 46",
+            "Men 47",
+            "Men 48",
+            "Men 49",
+            "Men 50",
+            "Men 51",
+            "Men 52",
+            "Men 53",
+            "Men 54",
+            "Men 55",
+            "Men 56",
+            "Men 57",
+            "Men 58",
+            "Men 59",
+            "Men 60",
+            "Men 61",
+            "Men 62",
+            "Men 63-64",
+            "Men 65-69",
+            "Men 70+",
+            "Men Clydesdale 39-under",
+            "Men Clydesdale 40-49",
+            "Men Clydesdale 50+",
+            "Men Single Speed 39-under",
+            "Men Single Speed 40+",
+            "Pro Cat 1 Men",
+            "Pro Cat 1 Women",
+            "Tandem",
+            "Women 19-24",
+            "Women 25-29",
+            "Women 30-32",
+            "Women 35-37",
+            "Women 40-42",
+            "Women 45-47",
+            "Women 50-51",
+            "Women 55-56",
+            "Women 60-69",
+            "Women 70+",
+            "Women 33-34",
+            "Women 38-39",
+            "Women 43-44",
+            "Women 48-49",
+            "Women 52-54",
+            "Women 57-59"
+          ]
+        },
+        {
+          "id": 2303607,
+          "name": "Slush Cup",
+          "included": true,
+          "categoryLabels": [
+            "Men 10-under",
+            "Men 11-12",
+            "Men 13-14",
+            "Men 15-16",
+            "Men 17-18",
+            "Men 19-44",
+            "Men 45-54",
+            "Men 55+",
+            "Tandem",
+            "Women 10-under",
+            "Women 11-12",
+            "Women 13-14",
+            "Women 15-16",
+            "Women 17-18",
+            "Women 19-44",
+            "Women 45-54",
+            "Women 55+"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2023,
+      "entries": 4627,
+      "events": {
+        "iceman": {
+          "entries": 4138,
+          "finishers": 4081
+        },
+        "slush-cup": {
+          "entries": 489,
+          "finishers": 488
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 3799,
+        "junior": 417,
+        "pro": 136,
+        "unclassified": 275
+      },
+      "raceGroupEvidence": {
+        "division": 4352,
+        "unknown": 275
+      },
+      "unclassifiedDivisions": {
+        "Men 19-44": 54,
+        "Men 45-54": 43,
+        "Men 55+": 30,
+        "Tandem": 20,
+        "Women 19-44": 61,
+        "Women 45-54": 31,
+        "Women 55+": 36
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 2413823,
+          "name": "Iceman",
+          "included": true,
+          "categoryLabels": [
+            "Fat Bike Men 39-under",
+            "Fat Bike Men 40-49",
+            "Fat Bike Men 50-54",
+            "Fat Bike Men 55+",
+            "Fat Bike Women",
+            "Junior Men 15-16",
+            "Junior Men 17-18",
+            "Junior Men 9-14",
+            "Junior Men Overall",
+            "Junior Women 15-16",
+            "Junior Women 17-18",
+            "Junior Women 9-14",
+            "Junior Women Overall",
+            "Lady Athena",
+            "Lady Single Speed",
+            "Men 19-24",
+            "Men 25-27",
+            "Men 28-29",
+            "Men 30-31",
+            "Men 32-33",
+            "Men 34",
+            "Men 35",
+            "Men 36",
+            "Men 37",
+            "Men 38",
+            "Men 39",
+            "Men 40",
+            "Men 41",
+            "Men 42",
+            "Men 43",
+            "Men 44",
+            "Men 45",
+            "Men 46",
+            "Men 47",
+            "Men 48",
+            "Men 49",
+            "Men 50",
+            "Men 51",
+            "Men 52",
+            "Men 53",
+            "Men 54",
+            "Men 55",
+            "Men 56",
+            "Men 57",
+            "Men 58",
+            "Men 59",
+            "Men 60",
+            "Men 61",
+            "Men 62",
+            "Men 63-64",
+            "Men 65-69",
+            "Men 70+",
+            "Men Clydesdale 39-under",
+            "Men Clydesdale 40-49",
+            "Men Clydesdale 50+",
+            "Men Single Speed 39-under",
+            "Men Single Speed 40+",
+            "Pro Cat 1 Men",
+            "Pro Cat 1 Women",
+            "Tandem",
+            "Women 19-24",
+            "Women 25-29",
+            "Women 30-32",
+            "Women 33-34",
+            "Women 35-37",
+            "Women 38-39",
+            "Women 40-42",
+            "Women 43-44",
+            "Women 45-47",
+            "Women 48-49",
+            "Women 50-51",
+            "Women 52-54",
+            "Women 55-56",
+            "Women 57-59",
+            "Women 60-69",
+            "Women 70+"
+          ]
+        },
+        {
+          "id": 2413824,
+          "name": "Slush Cup",
+          "included": true,
+          "categoryLabels": [
+            "Men 10-under",
+            "Men 11-12",
+            "Men 13-14",
+            "Men 15-16",
+            "Men 17-18",
+            "Men 19-44",
+            "Men 45-54",
+            "Men 55+",
+            "Tandem",
+            "Women 10-under",
+            "Women 11-12",
+            "Women 13-14",
+            "Women 15-16",
+            "Women 17-18",
+            "Women 19-44",
+            "Women 45-54",
+            "Women 55+"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2024,
+      "entries": 4804,
+      "events": {
+        "iceman": {
+          "entries": 4248,
+          "finishers": 4179
+        },
+        "slush-cup": {
+          "entries": 556,
+          "finishers": 551
+        }
+      },
+      "withWave": 0,
+      "withStart": 0,
+      "raceGroups": {
+        "amateur": 3886,
+        "junior": 504,
+        "pro": 143,
+        "unclassified": 271
+      },
+      "raceGroupEvidence": {
+        "division": 4390,
+        "resultSet": 143,
+        "unknown": 271
+      },
+      "unclassifiedDivisions": {
+        "Men 19-44": 57,
+        "Men 45-54": 42,
+        "Men 55+": 43,
+        "Tandem": 5,
+        "Women 19-44": 67,
+        "Women 45-54": 30,
+        "Women 55+": 27
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 2525753,
+          "name": "Pro/Cat 1 - Iceman",
+          "included": true,
+          "categoryLabels": []
+        },
+        {
+          "id": 2525751,
+          "name": "Iceman",
+          "included": true,
+          "categoryLabels": [
+            "Fat Bike Men 39-under",
+            "Fat Bike Men 40-49",
+            "Fat Bike Men 50-54",
+            "Fat Bike Men 55+",
+            "Fat Bike Women",
+            "Junior Men 14-under",
+            "Junior Men 15-16",
+            "Junior Men 17-18",
+            "Junior Men Overall",
+            "Junior Women 14-under",
+            "Junior Women 15-16",
+            "Junior Women 17-18",
+            "Junior Women Overall",
+            "Lady Athena",
+            "Lady Single Speed",
+            "Men 19-24",
+            "Men 25-27",
+            "Men 28-29",
+            "Men 30-31",
+            "Men 32-33",
+            "Men 34",
+            "Men 35",
+            "Men 36",
+            "Men 37",
+            "Men 38",
+            "Men 39",
+            "Men 40",
+            "Men 41",
+            "Men 42",
+            "Men 43",
+            "Men 44",
+            "Men 45",
+            "Men 46",
+            "Men 47",
+            "Men 48",
+            "Men 49",
+            "Men 50",
+            "Men 51",
+            "Men 52",
+            "Men 53",
+            "Men 54",
+            "Men 55",
+            "Men 56",
+            "Men 57",
+            "Men 58",
+            "Men 59",
+            "Men 60",
+            "Men 61",
+            "Men 62",
+            "Men 63-64",
+            "Men 65-66",
+            "Men 67-69",
+            "Men 70-74",
+            "Men 75+",
+            "Men Clydesdale 39-under",
+            "Men Clydesdale 40-49",
+            "Men Clydesdale 50+",
+            "Men Single Speed 39-under",
+            "Men Single Speed 40+",
+            "Tandem",
+            "Women 19-24",
+            "Women 25-29",
+            "Women 30-32",
+            "Women 33-34",
+            "Women 35-37",
+            "Women 38-39",
+            "Women 40-42",
+            "Women 43-44",
+            "Women 45-47",
+            "Women 48-49",
+            "Women 50-51",
+            "Women 52-54",
+            "Women 55-56",
+            "Women 57-59",
+            "Women 60-69",
+            "Women 70+"
+          ]
+        },
+        {
+          "id": 2525752,
+          "name": "Slush Cup",
+          "included": true,
+          "categoryLabels": [
+            "Men 10-under",
+            "Men 11-12",
+            "Men 13-14",
+            "Men 15-16",
+            "Men 17-18",
+            "Men 19-44",
+            "Men 45-54",
+            "Men 55+",
+            "Tandem",
+            "Women 10-under",
+            "Women 11-12",
+            "Women 13-14",
+            "Women 15-16",
+            "Women 17-18",
+            "Women 19-44",
+            "Women 45-54",
+            "Women 55+"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2025,
+      "entries": 4773,
+      "events": {
+        "iceman": {
+          "entries": 3934,
+          "finishers": 3832
+        },
+        "junior-iceman": {
+          "entries": 244,
+          "finishers": 235
+        },
+        "slush-cup": {
+          "entries": 595,
+          "finishers": 595
+        }
+      },
+      "withWave": 3809,
+      "withStart": 3809,
+      "raceGroups": {
+        "amateur": 3811,
+        "junior": 541,
+        "pro": 123,
+        "unclassified": 298
+      },
+      "raceGroupEvidence": {
+        "division": 4005,
+        "resultSet": 470,
+        "unknown": 298
+      },
+      "unclassifiedDivisions": {
+        "F 19-44": 77,
+        "F 45-99": 49,
+        "M 00-00": 1,
+        "M 19-44": 70,
+        "M 45-99": 101
+      },
+      "athlinksAssignmentFields": [],
+      "courses": [
+        {
+          "id": 2693581,
+          "name": "10 Mi Cycling Slush Cup Tandem",
+          "included": false,
+          "categoryLabels": [
+            "Relay",
+            "Team Relay"
+          ]
+        },
+        {
+          "id": 2693580,
+          "name": "10 Mi Cycling Slush Cup",
+          "included": true,
+          "categoryLabels": [
+            "F 01-12",
+            "F 13-18",
+            "F 19-44",
+            "F 45-99",
+            "M 00-00",
+            "M 01-12",
+            "M 13-18",
+            "M 19-44",
+            "M 45-99"
+          ]
+        },
+        {
+          "id": 2693579,
+          "name": "30 Mi Cycling Tandem",
+          "included": false,
+          "categoryLabels": [
+            "Relay",
+            "Team Relay"
+          ]
+        },
+        {
+          "id": 2693578,
+          "name": "4 Mi Cycling  Junior",
+          "included": false,
+          "categoryLabels": [
+            "F 09-14",
+            "F 15-16",
+            "F 17-18",
+            "M 09-14",
+            "M 15-16",
+            "M 17-18",
+            "F Overall",
+            "M Overall"
+          ]
+        },
+        {
+          "id": 2693577,
+          "name": "30 Mi Cycling Pro/Cat1",
+          "included": false,
+          "categoryLabels": [
+            "F 01-99",
+            "M 01-99"
+          ]
+        },
+        {
+          "id": 2693576,
+          "name": "30 Mi Cycling",
+          "included": true,
+          "categoryLabels": [
+            "F 19-24",
+            "F 25-29",
+            "F 30-32",
+            "F 33-34",
+            "F 35-37",
+            "F 38-39",
+            "F 40-42",
+            "F 43-44",
+            "F 45-47",
+            "F 48-49",
+            "F 50-51",
+            "F 50-54",
+            "F 52-54",
+            "F 55-56",
+            "F 57-59",
+            "F 60-69",
+            "F 70-99",
+            "M 19-24",
+            "M 25-27",
+            "M 28-29",
+            "M 30-31",
+            "M 32-33",
+            "M 34-34",
+            "M 35-35",
+            "M 36-36",
+            "M 37-37",
+            "M 38-38",
+            "M 39-39",
+            "M 40-40",
+            "M 41-41",
+            "M 42-42",
+            "M 43-43",
+            "M 44-44",
+            "M 45-45",
+            "M 46-46",
+            "M 47-47",
+            "M 48-48",
+            "M 49-49",
+            "M 50-50",
+            "M 51-51",
+            "M 52-52",
+            "M 53-53",
+            "M 54-54",
+            "M 55-55",
+            "M 56-56",
+            "M 57-57",
+            "M 58-58",
+            "M 59-59",
+            "M 60-60",
+            "M 61-61",
+            "M 62-62",
+            "M 63-64",
+            "M 65-66",
+            "M 67-69",
+            "M 70-74",
+            "M 75-100",
+            "U 75-100",
+            "01-39 Clydesdale",
+            "01-39 Fat Tire",
+            "01-39 Single Speed",
+            "40-49 Clydesdale",
+            "40-49 Fat Tire",
+            "40-99 Single Speed",
+            "50-99 Clydesdale",
+            "55-99 Fat Tire",
+            "F Athena",
+            "F Fat Tire",
+            "F Single Speed"
+          ]
+        }
+      ],
+      "metadataSources": [],
+      "metadataCoverage": []
+    },
+    {
+      "year": 2026,
+      "entries": 5610,
+      "events": {
+        "iceman": {
+          "entries": 4638,
+          "finishers": 3787
+        },
+        "junior-iceman": {
+          "entries": 262,
+          "finishers": 218
+        },
+        "slush-cup": {
+          "entries": 710,
+          "finishers": 548
+        }
+      },
+      "withWave": 4900,
+      "withStart": 4900,
+      "raceGroups": {
+        "amateur": 5124,
+        "junior": 355,
+        "pro": 131
+      },
+      "raceGroupEvidence": {
+        "division": 5216,
+        "resultSet": 394
+      },
+      "unclassifiedDivisions": {},
+      "athlinksAssignmentFields": [],
+      "courses": [],
+      "metadataSources": [],
+      "metadataCoverage": []
+    }
+  ]
+}

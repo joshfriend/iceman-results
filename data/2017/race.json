@@ -15,5 +15,19 @@
   "sources": {
     "results": "raw/athlinks-results.json",
     "divisions": "raw/athlinks-divisions.json"
-  }
+  },
+  "additionalResults": [
+    {
+      "raceEvent": "slush-cup",
+      "format": "athlinks",
+      "eventId": 603263,
+      "courseIds": [
+        1104825
+      ],
+      "results": "raw/slush-cup-results.json",
+      "metadata": "raw/slush-cup-metadata.json",
+      "divisions": "raw/slush-cup-divisions.json",
+      "resultsUrl": "https://www.athlinks.com/event/35208/results/Event/603263/Course/1104825/Results?page=1"
+    }
+  ]
 }

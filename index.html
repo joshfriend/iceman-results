@@ -11,6 +11,10 @@
   <header class="masthead">
     <h1 id="race-title" class="eyebrow">Iceman Cometh</h1>
     <div class="search-controls">
+      <div class="event-picker">
+        <label for="event">Race</label>
+        <select id="event" name="race" aria-label="Race"></select>
+      </div>
       <div class="year-picker">
         <label for="year">Year</label>
         <select id="year" name="year" aria-label="Race year"></select>
@@ -27,7 +31,39 @@
     <div id="matches" class="matches" hidden></div>
   </header>
 
-  <main id="report" hidden>
+  <main>
+    <section id="year-recap" aria-labelledby="recap-title">
+      <div class="recap-heading">
+        <div>
+          <h2 id="recap-title"></h2>
+          <p id="recap-subtitle" class="muted"></p>
+        </div>
+        <p id="recap-middle-half" class="recap-highlight"></p>
+      </div>
+      <dl id="recap-facts" class="facts recap-facts"></dl>
+      <div class="recap-breakdown">
+        <div>
+          <h3>Finishers by race group</h3>
+          <p class="muted">Count and median finish time for each published group.</p>
+          <p id="recap-unclassified-note" class="footnote" hidden>Some historical results do not identify amateur or pro status; those finishers are kept separate.</p>
+        </div>
+        <div class="scroll-x">
+          <table class="recap-table">
+            <thead><tr><th scope="col">Race group</th><th scope="col">Finishers</th><th scope="col">Median</th></tr></thead>
+            <tbody id="recap-groups"></tbody>
+          </table>
+        </div>
+      </div>
+      <section class="entries-history" aria-labelledby="entries-history-title">
+        <h3 id="entries-history-title">Entries by year</h3>
+        <ul class="legend">
+          <li><span class="swatch entries-finished"></span>Finished</li>
+          <li><span class="swatch entries-unfinished"></span>Did not finish (DNF / DNS / DSQ)</li>
+        </ul>
+        <div class="scroll-x"><div id="entries-history-chart"></div></div>
+      </section>
+    </section>
+    <div id="report" hidden>
     <section class="rider">
       <div class="name-row">
         <h2 id="rider-name"></h2>
@@ -49,6 +85,7 @@
           <tbody id="history-rows"></tbody>
         </table>
       </div>
+      <p class="footnote">Highlighted years mark division podium finishes (up to 5th place).</p>
     </section>
 
     <div id="details">
@@ -99,14 +136,26 @@
     <section id="wave-results">
       <h3>Finish times by wave</h3>
       <ul class="legend">
-        <li><span class="swatch box"></span>Box: median ± 1 SD</li>
+        <li><span class="swatch box"></span>Box: middle 50%</li>
         <li><span class="line median-solid"></span>Median</li>
-        <li><span class="line range"></span>Fastest to slowest</li>
+        <li><span class="line range"></span>Whiskers: within 1.5×IQR</li>
         <li><span class="dot"></span>Finishers</li>
+        <li><span class="dot outlier"></span>Outliers</li>
         <li><span class="line you dashed"></span>Your finish</li>
       </ul>
-      <div class="scroll-x"><div id="waves"></div></div>
+      <div class="scroll-x">
+        <div id="waves">
+          <div id="wave-header" class="wave-fixed"></div>
+          <div id="wave-rows" tabindex="0" role="region" aria-label="Start wave chart rows" aria-describedby="wave-scroll-note">
+            <div id="wave-rows-content"></div>
+          </div>
+          <div id="wave-axis" class="wave-fixed"></div>
+        </div>
+      </div>
+      <p id="wave-scroll-note" class="footnote">Scroll the rows to compare waves; your wave starts centered when space allows. Swipe sideways to see the full chart on small screens.</p>
+      <p class="footnote">Boxes span the 25th–75th percentiles; IQR is the width of that interval. Whiskers end at the fastest and slowest finishes within 1.5×IQR of the box. Hollow dots flag unusual times within each wave, not invalid results; all finishes remain included. Hover over a dot for its time.</p>
     </section>
+    </div>
     </div>
   </main>
 

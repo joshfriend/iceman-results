@@ -15,5 +15,12 @@
   "sources": {
     "results": "raw/athlinks-results.json",
     "divisions": "raw/athlinks-divisions.json"
-  }
+  },
+  "riderMetadata": [
+    {
+      "format": "runmichigan",
+      "path": "raw/runmichigan-results.html",
+      "sourceUrl": "https://www.runmichigan.com/results/full.php/2010/11/06/iceman-cometh-challenge-3.html"
+    }
+  ]
 }

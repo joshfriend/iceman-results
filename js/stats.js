@@ -15,6 +15,26 @@ export function parseRace(json) {
   return { race: json.race, riders, finishers };
 }
 
+export function selectRaceEvent(race, event, name) {
+  const riders = race.riders.filter((rider) => event === "iceman"
+    ? rider.raceEvent !== "slush-cup"
+    : rider.raceEvent === event);
+  const source = race.race.dataSources?.additionalResults
+    ?.find((result) => result.raceEvent === event);
+  return {
+    race: {
+      ...race.race,
+      name,
+      ...(source ? {
+        resultsUrl: source.resultsUrl,
+        sourceName: source.format === "raceresult" ? "RaceResult results" : "Athlinks results",
+      } : {}),
+    },
+    riders,
+    finishers: riders.filter((rider) => rider.finished),
+  };
+}
+
 export function findRiders(riders, query) {
   const text = query.trim().toLowerCase();
   if (!text) return [];
@@ -250,6 +270,41 @@ function percentile(sorted, p) {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
 }
 
+export function raceRecap({ riders, finishers }) {
+  const dns = riders.filter((rider) => rider.status === "DNS").length;
+  const starters = riders.length - dns;
+  const times = finishers.map((rider) => rider.net).sort((a, b) => a - b);
+  const groups = new Map();
+  for (const rider of finishers) {
+    const key = rider.raceGroup || "unclassified";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(rider.net);
+  }
+  const groupOrder = ["amateur", "pro", "junior", "unclassified"];
+  return {
+    entries: riders.length,
+    starters,
+    finishers: finishers.length,
+    dns,
+    dnf: riders.filter((rider) => rider.status === "DNF").length,
+    dsq: riders.filter((rider) => rider.status === "DSQ").length,
+    finishRate: starters ? finishers.length / starters * 100 : null,
+    fastest: times.length ? times[0] : null,
+    q1: times.length ? percentile(times, 0.25) : null,
+    median: times.length ? median(times) : null,
+    q3: times.length ? percentile(times, 0.75) : null,
+    groups: [...groups]
+      .sort(([a], [b]) => (groupOrder.indexOf(a) < 0 ? groupOrder.length : groupOrder.indexOf(a))
+        - (groupOrder.indexOf(b) < 0 ? groupOrder.length : groupOrder.indexOf(b)))
+      .map(([key, groupTimes]) => ({
+        key,
+        title: key === "unclassified" ? "Unclassified" : key[0].toUpperCase() + key.slice(1),
+        finishers: groupTimes.length,
+        median: median(groupTimes),
+      })),
+  };
+}
+
 function summarize(key, title, members, rider, officialRank) {
   const times = members.map((r) => r.net);
   const faster = times.filter((t) => t < rider.net).length;
@@ -298,15 +353,23 @@ export function waveStats(finishers, race) {
   }
   return [...byWave.keys()].sort((a, b) => a - b).map((wave) => {
     const times = byWave.get(wave);
+    const sorted = [...times].sort((a, b) => a - b);
+    const q1 = percentile(sorted, 0.25);
+    const q3 = percentile(sorted, 0.75);
+    const iqr = q3 - q1;
+    const lowerFence = q1 - 1.5 * iqr;
+    const upperFence = q3 + 1.5 * iqr;
     return {
       wave,
       start: finishers.find((r) => r.wave === wave).start,
       times,
       n: times.length,
       median: median(times),
-      sd: populationSd(times),
-      min: Math.min(...times),
-      max: Math.max(...times),
+      q1, q3, lowerFence, upperFence,
+      whiskerMin: sorted.find((t) => t >= lowerFence),
+      whiskerMax: sorted.findLast((t) => t <= upperFence),
+      min: sorted[0],
+      max: sorted[sorted.length - 1],
     };
   });
 }

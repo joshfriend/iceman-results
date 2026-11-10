@@ -25,6 +25,18 @@
       "courseIds": [
         2525753
       ]
+    },
+    {
+      "raceEvent": "slush-cup",
+      "format": "athlinks",
+      "eventId": 1093362,
+      "courseIds": [
+        2525752
+      ],
+      "results": "raw/slush-cup-results.json",
+      "metadata": "raw/slush-cup-metadata.json",
+      "divisions": "raw/slush-cup-divisions.json",
+      "resultsUrl": "https://www.athlinks.com/event/35208/results/Event/1093362/Course/2525752/Results?page=1"
     }
   ]
 }

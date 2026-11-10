@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build:data": "python3 scripts/build_data.py",
+    "audit:sources": "python3 scripts/audit_sources.py",
     "download:history": "python3 scripts/download_athlinks.py",
     "download:supplemental": "python3 -m scripts.download_supplemental",
     "test": "node --test",

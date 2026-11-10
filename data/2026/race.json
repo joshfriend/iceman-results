@@ -52,6 +52,7 @@
   "additionalResults": [
     {
       "raceGroup": "junior",
+      "raceEvent": "junior-iceman",
       "format": "raceresult",
       "results": "raw/junior-results.json"
     },
@@ -59,6 +60,12 @@
       "raceGroup": "pro",
       "format": "raceresult",
       "results": "raw/pro-results.json"
+    },
+    {
+      "raceEvent": "slush-cup",
+      "format": "raceresult",
+      "results": "raw/slush-cup-results.json",
+      "resultsUrl": "https://my.raceresult.com/421674/results"
     }
   ]
 }

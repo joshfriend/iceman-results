@@ -4,16 +4,93 @@ import { test } from "node:test";
 
 import {
   comparisonField, comparisonRank, estimateNextWave, findRiders, findYearRiders, groupsFor, kde, parseRace,
-  passCounts, riderHistory, waveStats, winnerGaps,
+  passCounts, raceRecap, riderHistory, selectRaceEvent, waveStats, winnerGaps,
 } from "../js/stats.js";
 
 const readJson = (path) => JSON.parse(readFileSync(new URL(`../data/${path}`, import.meta.url)));
 const dataIndex = readJson("index.json");
-const { race, riders, finishers } = parseRace(readJson("2026/results.json"));
-const { riders: riders2025, finishers: finishers2025 } = parseRace(readJson("2025/results.json"));
-const { riders: riders2001, finishers: finishers2001 } = parseRace(readJson("2001/results.json"));
-const { riders: riders2024, finishers: finishers2024 } = parseRace(readJson("2024/results.json"));
+const parseIceman = (path) => selectRaceEvent(parseRace(readJson(path)), "iceman", "Iceman Cometh");
+const { race, riders, finishers } = parseIceman("2026/results.json");
+const { riders: riders2025, finishers: finishers2025 } = parseIceman("2025/results.json");
+const { riders: riders2001, finishers: finishers2001 } = parseIceman("2001/results.json");
+const { riders: riders2024, finishers: finishers2024 } = parseIceman("2024/results.json");
 const josh = riders.find((r) => r.bib === 4026);
+
+test("race event selection keeps Slush Cup separate from Iceman results", () => {
+  const parsed = {
+    race: {
+      year: 2026,
+      resultsUrl: "https://example.com/iceman",
+      dataSources: { additionalResults: [{
+        raceEvent: "slush-cup", resultsUrl: "https://example.com/slush", format: "raceresult",
+      }] },
+    },
+    riders: [
+      { raceEvent: "iceman", finished: true },
+      { raceEvent: "junior-iceman", finished: false },
+      { raceEvent: "slush-cup", finished: true },
+    ],
+    finishers: [{ raceEvent: "iceman", finished: true }, { raceEvent: "slush-cup", finished: true }],
+  };
+  const iceman = selectRaceEvent(parsed, "iceman", "Iceman Cometh");
+  assert.deepEqual(iceman.riders.map((rider) => rider.raceEvent), ["iceman", "junior-iceman"]);
+  assert.equal(iceman.race.name, "Iceman Cometh");
+  const slush = selectRaceEvent(parsed, "slush-cup", "Slush Cup");
+  assert.deepEqual(slush.riders.map((rider) => rider.raceEvent), ["slush-cup"]);
+  assert.deepEqual(slush.finishers, slush.riders);
+  assert.equal(slush.race.resultsUrl, "https://example.com/slush");
+  assert.equal(slush.race.sourceName, "RaceResult results");
+});
+
+test("Slush Cup years and counts are indexed independently", () => {
+  const slushIndex = dataIndex.events["slush-cup"];
+  assert.equal(slushIndex.name, "Slush Cup");
+  assert.deepEqual(slushIndex.years.map((entry) => entry.year),
+    [2026, 2025, 2024, 2023, 2022, 2021, 2019, 2018, 2017, 2013, 2012, 2003]);
+  const entry2026 = slushIndex.years[0];
+  const slush = selectRaceEvent(parseRace(readJson(entry2026.path)), "slush-cup", slushIndex.name);
+  assert.equal(slush.riders.length, entry2026.riders);
+  assert.equal(slush.finishers.length, entry2026.finishers);
+  assert.equal(slush.riders.length, 710);
+  assert.equal(slush.finishers.length, 548);
+  assert.equal(riders.length, 4900);
+});
+
+test("race recap summarizes starts, finishes, time quartiles, and field groups", () => {
+  const summary = raceRecap({
+    riders: [
+      { status: 1, raceGroup: "amateur" },
+      { status: 2, raceGroup: "amateur" },
+      { status: "DNF", raceGroup: "pro" },
+      { status: "DNS", raceGroup: "junior" },
+      { status: "DSQ", raceGroup: "unclassified" },
+    ],
+    finishers: [
+      { net: 100, raceGroup: "amateur" },
+      { net: 200, raceGroup: "amateur" },
+    ],
+  });
+  assert.deepEqual({
+    entries: summary.entries,
+    starters: summary.starters,
+    finishers: summary.finishers,
+    dns: summary.dns,
+    dnf: summary.dnf,
+    dsq: summary.dsq,
+    finishRate: summary.finishRate,
+    fastest: summary.fastest,
+    q1: summary.q1,
+    median: summary.median,
+    q3: summary.q3,
+  }, {
+    entries: 5, starters: 4, finishers: 2, dns: 1, dnf: 1, dsq: 1,
+    finishRate: 50, fastest: 100, q1: 125, median: 150, q3: 175,
+  });
+  assert.deepEqual(summary.groups, [{
+    key: "amateur", title: "Amateur", finishers: 2, median: 150,
+  }]);
+  assert.equal(raceRecap({ riders: [{ status: "DNS" }], finishers: [] }).finishRate, null);
+});
 
 test("cross-year matching allows elapsed years plus or minus one and silently excludes age conflicts", () => {
   const rider = {
@@ -134,7 +211,7 @@ test("history validates against accepted years as well as the selected year", ()
 });
 
 test("Jonathan Winters' age-inconsistent 2016 result is excluded without a warning", () => {
-  const history = dataIndex.years.map((entry) => parseRace(readJson(entry.path)));
+  const history = dataIndex.years.map((entry) => parseIceman(entry.path));
   const current = history.find((year) => year.race.year === 2026);
   const selected = current.riders.find((r) => r.name === "Jonathan Winters");
   const old = history.find((year) => year.race.year === 2016);
@@ -188,7 +265,7 @@ test("duplicate Athlinks IDs remain ambiguous in rider history", () => {
 });
 
 test("normalized Athlinks IDs are preserved but do not override conflicting published ages", () => {
-  const history = dataIndex.years.map((entry) => parseRace(readJson(entry.path)));
+  const history = dataIndex.years.map((entry) => parseIceman(entry.path));
   let linked = 0;
   for (const year of history) {
     if (year.race.year >= 2025) {
@@ -303,7 +380,7 @@ test("history preserves non-finishes, handles ties and one-rider fields, and com
 });
 
 test("history finds every unambiguous exact-name result in the archive, including later years", () => {
-  const history = dataIndex.years.map((entry) => parseRace(readJson(entry.path)));
+  const history = dataIndex.years.map((entry) => parseIceman(entry.path));
   const selected = history.find((year) => year.race.year === 2007).riders
     .find((rider) => rider.name === "Kelli Emmett");
   assert.ok(selected);
@@ -384,7 +461,7 @@ test("historical divisions are recovered without inventing unpublished membershi
   let withDivision = 0;
   let missing = 0;
   for (const entry of dataIndex.years.filter((entry) => entry.year <= 2024)) {
-    const { riders, finishers, race } = parseRace(readJson(entry.path));
+    const { riders, finishers, race } = parseIceman(entry.path);
     const listed = riders.filter((r) => r.division);
     withDivision += listed.length;
     missing += riders.length - listed.length;
@@ -469,6 +546,52 @@ test("amateur wave stats cover 45 waves, with junior/pro starts separate", () =>
   const w29 = waves.find((w) => w.wave === 29);
   assert.equal(w29.n, 76);
   assert.equal(w29.median, 9940.5);
+});
+
+test("wave boxes use interpolated quartiles and observed whiskers, keeping outliers", () => {
+  const times = [1000, 17, 12, 16, 10, 1, 15, 13, 14, 11, 18];
+  const members = times.map((net) => ({ net, wave: 3, start: 100 }));
+  const [wave] = waveStats(members, {});
+  assert.equal(wave.q1, 11.5);
+  assert.equal(wave.q3, 16.5);
+  assert.equal(wave.lowerFence, 4);
+  assert.equal(wave.upperFence, 24);
+  assert.equal(wave.whiskerMin, 10);
+  assert.equal(wave.whiskerMax, 18);
+  assert.equal(wave.min, 1);
+  assert.equal(wave.max, 1000);
+  assert.equal(wave.median, 14);
+  assert.equal(wave.n, times.length);
+  assert.deepEqual(wave.times, times);
+  assert.deepEqual(members.map((r) => r.net), times);
+});
+
+test("wave whiskers include fence boundaries and handle small or identical samples", () => {
+  for (const [times, q1, q3, min, max] of [
+    [[10], 10, 10, 10, 10],
+    [[10, 20], 12.5, 17.5, 10, 20],
+    [[10, 10, 10, 10], 10, 10, 10, 10],
+    [[10, 10, 10, 10, 100], 10, 10, 10, 10],
+    [[4, 10, 12, 13, 14, 15, 16, 18, 24], 12, 16, 10, 18],
+    [[6, 10, 12, 13, 14, 15, 16, 18, 22], 12, 16, 6, 22],
+  ]) {
+    const [wave] = waveStats(times.map((net) => ({ net, wave: 1, start: 0 })), {});
+    assert.deepEqual([wave.q1, wave.q3, wave.whiskerMin, wave.whiskerMax], [q1, q3, min, max]);
+  }
+  assert.deepEqual(waveStats([], {}), []);
+});
+
+test("real slow wave finishes are flagged without changing counts or medians", () => {
+  const waves = waveStats(comparisonField(josh, finishers), race);
+  const w3 = waves.find((w) => w.wave === 3);
+  const w4 = waves.find((w) => w.wave === 4);
+  assert.equal(w3.n, 94);
+  assert.equal(w3.median, 7196);
+  assert.ok(w3.max > w3.upperFence);
+  assert.ok(w3.whiskerMax < w3.max);
+  assert.ok(w4.max > 7 * 3600);
+  assert.ok(w4.max > w4.upperFence);
+  assert.ok(w4.times.includes(w4.max));
 });
 
 test("next-wave estimate uses time requirements and shows the selected wave median", () => {
@@ -602,7 +725,7 @@ test("index lists every year folder, newest first, with matching counts", () => 
   const years = dataIndex.years.map((y) => y.year);
   assert.deepEqual(years, [...years].sort((a, b) => b - a));
   for (const entry of dataIndex.years) {
-    const yearData = parseRace(readJson(entry.path));
+    const yearData = parseIceman(entry.path);
     assert.equal(yearData.race.year, entry.year);
     assert.equal(yearData.riders.length, entry.riders);
     assert.equal(yearData.finishers.length, entry.finishers);
@@ -636,7 +759,7 @@ test("name variants require shared IDs rather than rider-specific aliases", () =
 });
 
 test("non-finishes and intermediate splits never become chart, benchmark, or wave times", () => {
-  const history = dataIndex.years.map((entry) => parseRace(readJson(entry.path)));
+  const history = dataIndex.years.map((entry) => parseIceman(entry.path));
   const old = history.find((year) => year.race.year === 2021);
   for (const name of ["Doug Helland", "William Gallagher Jr."]) {
     const rider = old.riders.find((r) => r.name === name);

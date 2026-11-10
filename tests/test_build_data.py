@@ -6,10 +6,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts.build_data import (
-    athlinks_divisions, parse_athlinks, parse_raceresult, parse_registericeman,
-    parse_start_list, published_age, race_group, supplement_athlinks_ids,
+    athlinks_divisions, athlinks_race_group, build_year, FIELDS, parse_athlinks,
+    parse_metadata_csv, parse_raceresult, parse_registericeman, parse_runmichigan,
+    parse_start_list, published_age, race_group, supplement_athlinks_ids, supplement_metadata,
 )
-from scripts.download_athlinks import deduplicate_rows, division_group, fetch_division_page
+from scripts.download_athlinks import deduplicate_rows, division_group, fetch_division_page, write_year
 from scripts.download_supplemental import raceresult, registericeman
 
 
@@ -255,6 +256,11 @@ class SupplementalResultsTests(unittest.TestCase):
         self.assertIsNone(winner["wave"])
         self.assertTrue(any("Romine" in rider["name"] for rider in riders))
 
+    def test_published_corral_without_schedule_keeps_start_unknown(self):
+        riders = list(parse_registericeman(Path("data/2025/raw/overall-results.json"), None, None))
+        self.assertTrue(any(rider["wave"] is not None for rider in riders))
+        self.assertTrue(all(rider["start"] is None for rider in riders))
+
     def test_pro_times_use_total_clock_not_the_last_split(self):
         riders = list(parse_registericeman(Path("data/2025/raw/pro-results.json"), 31500, 180))
         self.assertEqual(len(riders), 123)
@@ -269,6 +275,12 @@ class SupplementalResultsTests(unittest.TestCase):
         self.assertTrue(all(rider["net"] is None for rider in riders
                             if not isinstance(rider["status"], int)))
 
+    def test_raceresult_negative_overall_status_is_a_dnf(self):
+        riders = list(parse_raceresult(Path("data/2026/raw/slush-cup-results.json")))
+        dnf = next(rider for rider in riders if rider["bib"] == "5631")
+        self.assertEqual(dnf["status"], "DNF")
+        self.assertIsNone(dnf["net"])
+
     def test_junior_wave_is_published_number_not_a_formula_from_main_start(self):
         starts = parse_start_list(Path("data/2026/raw/start-list.txt"))
         self.assertEqual(starts["6003"], (12 * 3600, 49))
@@ -281,8 +293,192 @@ class SupplementalResultsTests(unittest.TestCase):
             ("Men 15-18", None, "junior"),
             ("Men 15-49", None, "amateur"),
             ("Men 40", 40, "amateur"),
-            ("Single Speed", 16, "junior"),
+            ("Single Speed", 16, "amateur"),
             ("M N/A", None, "amateur"),
         ):
             with self.subTest(division=division):
                 self.assertEqual(race_group({"division": division, "age": age}), expected)
+
+
+class MetadataTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.folder = Path(self.temp.name)
+        self.rider = {
+            "bib": 123, "name": "Rider One", "gender": "M", "net": 3600,
+            "start": None, "wave": None, "raceGroup": "unclassified",
+        }
+
+    def test_exact_join_and_field_provenance(self):
+        metadata = {
+            "bib": 123, "name": " RIDER ONE ", "gender": "M", "net": 3600,
+            "wave": 2, "start": 31680, "raceGroup": "amateur",
+        }
+        self.assertEqual(supplement_metadata([self.rider], [metadata], "metadata:0"), 1)
+        self.assertEqual(self.rider["wave"], 2)
+        self.assertEqual(self.rider["start"], 31680)
+        for field in ("wave", "start", "raceGroup"):
+            self.assertEqual(self.rider[f"{field}Source"], "metadata:0")
+
+    def test_missing_bib_can_be_recovered_but_conflicting_bib_cannot(self):
+        metadata = {**self.rider, "bib": 456, "raceGroup": "pro"}
+        with self.assertRaisesRegex(ValueError, "no unique matching"):
+            supplement_metadata([self.rider], [metadata], "metadata:0")
+        self.rider["bib"] = None
+        supplement_metadata([self.rider], [metadata], "metadata:0")
+        self.assertEqual(self.rider["bib"], 456)
+
+    def test_supplemental_division_can_establish_pro_status_without_a_group_column(self):
+        record = {**self.rider, "division": "Pro Cat 1 Men"}
+        del record["raceGroup"]
+        supplement_metadata([self.rider], [record], "metadata:0")
+        self.assertEqual(self.rider["raceGroup"], "pro")
+        self.assertEqual(self.rider["raceGroupSource"], "metadata:0")
+
+    def test_ambiguous_repeated_and_conflicting_assignments_fail(self):
+        metadata = {**self.rider, "wave": 2}
+        with self.assertRaisesRegex(ValueError, "no unique matching"):
+            supplement_metadata([self.rider, dict(self.rider)], [metadata], "metadata:0")
+        with self.assertRaisesRegex(ValueError, "repeated metadata"):
+            supplement_metadata([self.rider], [metadata, metadata], "metadata:0")
+        with self.assertRaisesRegex(ValueError, "conflicting wave"):
+            supplement_metadata([self.rider], [{**metadata, "wave": 3}], "metadata:0")
+
+    def test_archive_unmatched_rows_are_reported_not_fuzzily_joined(self):
+        metadata = {**self.rider, "name": "Rider On"}
+        output = io.StringIO()
+        with patch("sys.stdout", output):
+            self.assertEqual(supplement_metadata(
+                [self.rider], [metadata], "metadata:0", allow_unmatched=True,
+            ), 0)
+        self.assertIn("1 unmatched rows", output.getvalue())
+        self.assertEqual(self.rider["raceGroup"], "unclassified")
+
+    def test_csv_validates_assignments_and_categories(self):
+        path = self.folder / "metadata.csv"
+        path.write_text("bib,name,gender,net,wave,start,raceGroup\n"
+                        "123,Rider One,M,01:00:00,2,08:48:00,amateur\n")
+        row = list(parse_metadata_csv(path))[0]
+        self.assertEqual((row["wave"], row["start"], row["net"]), (2, 31680, 3600))
+        for text in ("0", "-2", "Wave 2"):
+            path.write_text(f"bib,name,gender,net,wave\n123,Rider One,M,01:00:00,{text}\n")
+            with self.assertRaisesRegex(ValueError, "invalid wave"):
+                list(parse_metadata_csv(path))
+        path.write_text("bib,name,gender,net,start\n123,Rider One,M,01:00:00,24:00:00\n")
+        with self.assertRaisesRegex(ValueError, "within the race day"):
+            list(parse_metadata_csv(path))
+        path.write_text("bib,name,gender,net,raceGroup\n123,Rider One,M,01:00:00,elite\n")
+        with self.assertRaisesRegex(ValueError, "invalid raceGroup"):
+            list(parse_metadata_csv(path))
+
+    def test_published_category_schema_not_presence_of_a_pro_rider(self):
+        course = {"courseId": 20, "courseName": "Main"}
+        metadata = [{
+            "eventCourseId": 20, "eventCourseName": "Main",
+            "metadata": {"divisions": [{"name": "M 40-44"}, {"name": "M PRO"}]},
+        }]
+        self.assertEqual(athlinks_race_group("M 40-44", "M", course, metadata, {}), "amateur")
+        self.assertEqual(athlinks_race_group("", "M", course, metadata, {}), "unclassified")
+        self.assertEqual(athlinks_race_group("F 40-44", "F", course, metadata, {}), "unclassified")
+        self.assertEqual(athlinks_race_group("M 40-44", "M", course, [], {}), "unclassified")
+        self.assertEqual(athlinks_race_group("M PRO", "M", course, [], {}), "pro")
+
+    def test_archived_fixed_width_tables_preserve_original_category(self):
+        path = self.folder / "results.html"
+        path.write_text(
+            "<pre>MALE ICEMAN RESULTS<br>CLASS: PRO/SEMI-PRO MEN<br>"
+            "Place Name                   No.   Town           Sta Sponsor              Ice<br>"
+            "===== ====================== ===== ============== === ==================== =======<br>"
+            "    1 Jeremiah Bishop           35 Harrisonburg   VA Trek                 1:28:31<br>"
+            "</pre>"
+        )
+        row = list(parse_runmichigan(path))[0]
+        self.assertEqual((row["name"], row["bib"], row["net"]), ("Jeremiah Bishop", 35, 5311))
+        self.assertEqual((row["division"], row["raceGroup"]), ("PRO/SEMI-PRO MEN", "pro"))
+
+    def test_real_archives_recover_all_published_pro_finishers_without_guessing(self):
+        for year, matched, unmatched, pros in ((2008, 1936, 17, 58), (2010, 2776, 171, 89)):
+            with self.subTest(year=year):
+                result = json.loads(Path(f"data/{year}/results.json").read_text())
+                riders = [dict(zip(result["fields"], row)) for row in result["riders"]]
+                self.assertEqual(sum(rider["raceGroup"] == "pro" for rider in riders), pros)
+                self.assertEqual(result["race"]["metadataCoverage"], [{
+                    "source": "metadata:0", "rows": matched + unmatched,
+                    "matched": matched, "unmatched": unmatched,
+                }])
+                self.assertTrue(all(rider["raceGroupSource"] == "metadata:0"
+                                    for rider in riders if rider["raceGroup"] == "pro"))
+                self.assertTrue(all(rider["wave"] is None for rider in riders))
+
+    def test_event_identity_is_separate_from_junior_age_categories(self):
+        for year in (2003, 2025, 2026):
+            with self.subTest(year=year):
+                result = json.loads(Path(f"data/{year}/results.json").read_text())
+                fields = result["fields"]
+                juniors = [dict(zip(fields, row)) for row in result["riders"]
+                           if row[fields.index("raceGroup")] == "junior"
+                           and row[fields.index("raceEvent")] != "slush-cup"]
+                self.assertTrue(juniors)
+                event = "iceman" if year == 2003 else "junior-iceman"
+                self.assertTrue(all(rider["raceEvent"] == event for rider in juniors))
+
+    def test_downloader_refresh_preserves_supplemental_sources(self):
+        folder = self.folder / "2010"
+        folder.mkdir()
+        extras = [{"format": "athlinks", "results": "raw/pro-results.json", "raceGroup": "pro"}]
+        metadata = [{"format": "csv", "path": "raw/metadata.csv"}]
+        (folder / "race.json").write_text(json.dumps({
+            "resultsFormat": "athlinks", "riderMetadata": metadata, "additionalResults": extras,
+        }))
+        group = {
+            "eventCourseId": 20, "totalAthletes": 1,
+            "interval": {"intervalResults": [{"entryId": 1, "overallRank": 1}]},
+        }
+        with patch("scripts.download_athlinks.DATA", self.folder):
+            with patch("scripts.download_athlinks.fetch_course_page", return_value=([group], group)):
+                write_year(
+                    {"raceID": 100, "raceDate": "2010-11-06"},
+                    [{"eventCourseID": 20, "courseName": "Iceman"}],
+                )
+        config = json.loads((folder / "race.json").read_text())
+        self.assertEqual(config["riderMetadata"], metadata)
+        self.assertEqual(config["additionalResults"], extras)
+
+    def test_csv_wave_derives_start_only_with_published_schedule(self):
+        (self.folder / "raw").mkdir()
+        source = json.loads(Path("data/2025/raw/overall-results.json").read_text())
+        page = source["pages"][0]
+        page["resultSet"]["results"] = page["resultSet"]["results"][:1]
+        page["resultSet"]["numResults"] = 1
+        headings = {heading["name"]: i for i, heading in enumerate(page["headings"])}
+        row = page["resultSet"]["results"][0]
+        row[headings["Corral"]] = ""
+        (self.folder / "raw/results.json").write_text(json.dumps({"pages": [page]}))
+        (self.folder / "raw/metadata.csv").write_text(
+            "bib,name,gender,net,wave\n"
+            f"{row[headings['Bib']]},{row[headings['Name']]},{row[headings['Gender']]},"
+            f"{row[headings['Finish Time (Cumulative)']]},2\n"
+        )
+        config = {
+            "year": 2025, "date": "2025-11-08", "resultsUrl": "https://example.com/results",
+            "resultsFormat": "registericeman", "firstStart": "08:45:00",
+            "waveSeconds": 180, "podiumDepth": 5, "sources": {"results": "raw/results.json"},
+            "riderMetadata": [{"format": "csv", "path": "raw/metadata.csv"}],
+        }
+        (self.folder / "race.json").write_text(json.dumps(config))
+        with patch("scripts.build_data.ROOT", self.folder):
+            build_year(self.folder)
+        result = json.loads((self.folder / "results.json").read_text())
+        rider = dict(zip(FIELDS, result["riders"][0]))
+        self.assertEqual((rider["wave"], rider["start"]), (2, 31680))
+        self.assertEqual((rider["waveSource"], rider["startSource"]), ("metadata:0", "waveSchedule"))
+        config.update(firstStart=None, waveSeconds=None)
+        (self.folder / "race.json").write_text(json.dumps(config))
+        with patch("scripts.build_data.ROOT", self.folder):
+            build_year(self.folder)
+        result = json.loads((self.folder / "results.json").read_text())
+        rider = dict(zip(FIELDS, result["riders"][0]))
+        self.assertEqual(rider["wave"], 2)
+        self.assertIsNone(rider["start"])
+        self.assertIsNone(rider["startSource"])
