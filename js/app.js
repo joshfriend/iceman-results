@@ -73,18 +73,27 @@ function lookup(query, push = true) {
 function show(rider) {
   setMessage("");
   $("rider-name").textContent = rider.name;
+  $("rider-city").textContent = rider.city;
   $("report").hidden = false;
   $("details").hidden = !rider.finished;
+  document.title = `${rider.name} — Iceman Cometh 2026`;
+  const facts = [
+    { label: "Bib", value: `#${rider.bib}` },
+    { label: "Division", value: rider.division },
+  ];
   if (!rider.finished) {
-    $("rider-meta").textContent = `Bib ${rider.bib} · ${rider.city} · ${rider.division} — listed as ${rider.status}, so there's no finish time to chart.`;
-    document.title = `${rider.name} — Iceman Cometh 2026`;
+    facts.push({ label: "Result", value: rider.status });
+    renderFacts(facts);
+    $("rider-status").textContent = `Listed as ${rider.status}, so there's no finish time to chart.`;
     return;
   }
-  $("rider-meta").textContent = [
-    `Bib ${rider.bib}`, rider.city, rider.division,
-    `Wave ${rider.wave} · ${clockTime(rider.start)} start`,
-    `${hms(rider.net)} · crossed at ${hms(rider.clock)}`,
-  ].join("  ·  ");
+  $("rider-status").textContent = "";
+  renderFacts([
+    { label: "Finish time", value: hms(rider.net), note: "official net time", primary: true },
+    ...facts,
+    { label: "Start", value: clockTime(rider.start), note: `wave ${rider.wave}` },
+    { label: "Finished at", value: hms(rider.clock), note: "time of day" },
+  ]);
 
   const counts = passCounts(rider, data.finishers);
   $("passed").textContent = fmt(counts.passed);
@@ -93,7 +102,26 @@ function show(rider) {
 
   drawCurves(rider);
   drawWaves(rider);
-  document.title = `${rider.name} — Iceman Cometh 2026`;
+}
+
+function renderFacts(facts) {
+  $("rider-facts").classList.toggle("short", facts.length === 3);
+  $("rider-facts").replaceChildren(...facts.map(({ label, value, note, primary }) => {
+    const item = document.createElement("div");
+    item.className = primary ? "fact primary" : "fact";
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    item.append(dt, dd);
+    if (note) {
+      const small = document.createElement("span");
+      small.className = "fact-note";
+      small.textContent = note;
+      item.append(small);
+    }
+    return item;
+  }));
 }
 
 function domainFor(riderMinutes) {
