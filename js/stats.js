@@ -4,6 +4,7 @@ export function parseRace(json) {
   const index = Object.fromEntries(json.fields.map((field, i) => [field, i]));
   const riders = json.riders.map((row) => {
     const rider = Object.fromEntries(json.fields.map((field) => [field, row[index[field]]]));
+    rider.raceYear = json.race.year;
     rider.finished = Number.isInteger(rider.status);
     rider.clock = rider.finished && Number.isFinite(rider.start) ? rider.start + rider.net : null;
     return rider;
@@ -40,11 +41,55 @@ export function findRiders(riders, query) {
   });
   if (!candidates.length) return [];
   const best = Math.max(...candidates.map(({ exact }) => exact));
-  return candidates.filter(({ exact }) => exact === best).map(({ rider }) => rider);
+  return candidates
+    .filter(({ exact }) => exact === best)
+    .map(({ rider }) => rider)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 }
 
 function searchWords(value) {
   return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+function ageRange(rider) {
+  if (Number.isInteger(rider.age) && rider.age > 0 && rider.age <= 120) {
+    return [rider.age, rider.age];
+  }
+  const division = String(rider.division ?? "").trim();
+  const compact = /^[MF](\d{2})(\d{2,3})$/i.exec(division);
+  const range = compact ?? /\b(\d{1,3})\s*-\s*(\d{1,3})\b/.exec(division);
+  if (range) {
+    const min = Number(range[1]), max = Number(range[2]);
+    return min > 0 && min <= max && max <= 120 ? [min, max] : null;
+  }
+  const under = /\bU(\d{1,3})\b/i.exec(division);
+  if (under) return Number(under[1]) > 1 ? [1, Number(under[1]) - 1] : null;
+  const upTo = /\b(\d{1,3})\s*(?:-\s*|&\s*)?under\b/i.exec(division);
+  if (upTo) return [1, Number(upTo[1])];
+  const plus = /\b(\d{1,3})\s*\+/.exec(division);
+  if (plus) return [Number(plus[1]), 120];
+  const single = /^(?:Men|Women|M|F)\s+(\d{1,3})$/i.exec(division);
+  return single && Number(single[1]) > 0 ? [Number(single[1]), Number(single[1])] : null;
+}
+
+function agesCompatible(rider, other, year = rider.raceYear, otherYear = other.raceYear) {
+  if (!Number.isInteger(year) || !Number.isInteger(otherYear)) return true;
+  const age = ageRange(rider), otherAge = ageRange(other);
+  if (!age || !otherAge) return true;
+  const elapsed = otherYear - year;
+  return otherAge[1] - age[0] >= elapsed - 1 && otherAge[0] - age[1] <= elapsed + 1;
+}
+
+function identityMatches(rider, candidates, nameMatches,
+  compatible = (other) => agesCompatible(rider, other)) {
+  const hasId = Number.isInteger(rider.athlinksRacerId) && rider.athlinksRacerId > 0;
+  if (hasId) {
+    const sameId = candidates.filter((other) => other.athlinksRacerId === rider.athlinksRacerId);
+    if (sameId.length) return sameId.filter(compatible);
+  }
+  return candidates.filter((other) =>
+    !(hasId && Number.isInteger(other.athlinksRacerId) && other.athlinksRacerId > 0)
+    && nameMatches(other) && compatible(other));
 }
 
 export function findYearRiders(riders, query, nextRiders) {
@@ -54,7 +99,7 @@ export function findYearRiders(riders, query, nextRiders) {
   }
   const rider = current[0];
   const name = searchWords(rider.name).join(" ");
-  const matches = nextRiders.filter((other) =>
+  const matches = identityMatches(rider, nextRiders, (other) =>
     rider.person && other.person
       ? other.person === rider.person
       : searchWords(other.name).join(" ") === name);
@@ -68,17 +113,25 @@ export function riderHistory(rider, history) {
   const name = rider.name.trim().toLowerCase();
   const results = [];
   const ambiguousYears = [];
-  let previousTime = null;
-  for (const year of [...history].sort((a, b) => a.race.year - b.race.year)) {
+  const selectedYear = history.find((year) => year.riders.includes(rider))?.race.year ?? rider.raceYear;
+  const accepted = [{ rider, year: selectedYear }];
+  const ordered = [...history].sort((a, b) => Number.isInteger(selectedYear)
+    ? Math.abs(a.race.year - selectedYear) - Math.abs(b.race.year - selectedYear)
+      || b.race.year - a.race.year
+    : a.race.year - b.race.year);
+  for (const year of ordered) {
     const matches = year.riders.includes(rider)
       ? [rider]
-      : year.riders.filter((other) => other.name.trim().toLowerCase() === name);
+      : identityMatches(rider, year.riders, (other) => other.name.trim().toLowerCase() === name,
+        (other) => accepted.every((anchor) =>
+          agesCompatible(anchor.rider, other, anchor.year, year.race.year)));
     if (matches.length > 1) {
       ambiguousYears.push(year.race.year);
       continue;
     }
     if (!matches.length) continue;
     const match = matches[0];
+    accepted.push({ rider: match, year: year.race.year });
     const timed = match.finished && Number.isFinite(match.net) && match.net > 0;
     const fieldSize = year.finishers.length;
     const slower = timed ? year.finishers.filter((other) => other.net > match.net).length : 0;
@@ -88,11 +141,17 @@ export function riderHistory(rider, history) {
       fieldSize,
       net: timed ? match.net : null,
       aheadPct: timed && fieldSize > 1 ? slower / (fieldSize - 1) * 100 : null,
-      timeChange: timed && previousTime !== null ? match.net - previousTime : null,
+      timeChange: null,
     });
-    if (timed) previousTime = match.net;
   }
-  return { results, ambiguousYears };
+  results.sort((a, b) => a.year - b.year);
+  let previousTime = null;
+  for (const result of results) {
+    if (result.net === null) continue;
+    result.timeChange = previousTime === null ? null : result.net - previousTime;
+    previousTime = result.net;
+  }
+  return { results, ambiguousYears: ambiguousYears.sort((a, b) => a - b) };
 }
 
 // Estimated from scheduled wave start + official net time, not observed on-course passes.
@@ -109,17 +168,19 @@ export function passCounts(rider, finishers) {
 
 // Division podium status; off the podium, the gap is to the last podium place (race.podiumDepth).
 export function podium(rider, finishers, depth) {
-  if (!rider.finished || !rider.division) return null;
+  if (!rider.finished || !rider.division || !Number.isInteger(rider.divisionRank)
+    || rider.divisionRank <= 0) return null;
   const division = finishers.filter((r) => r.division === rider.division);
   const place = rider.divisionRank;
   if (place <= depth) return { onPodium: true, place, size: division.length };
-  const last = division.find((r) => r.divisionRank === depth);
+  const last = division.filter((r) => r.divisionRank > 0 && r.divisionRank <= depth)
+    .sort((a, b) => b.divisionRank - a.divisionRank)[0];
   return {
     onPodium: false,
     place,
     size: division.length,
     lastPodium: last,
-    gap: rider.net - last.net,
+    gap: last ? rider.net - last.net : null,
     placesBack: place - depth,
   };
 }
@@ -217,9 +278,13 @@ export function estimateNextWave(rider, history, waves, race) {
 
   const historyStart = race.year - 4;
   const results = [];
-  for (const year of history) {
-    if (year.race.year < historyStart || year.race.year > race.year) continue;
-    const sameName = year.finishers.filter((r) => r.person === rider.person);
+  for (const year of [...history].sort((a, b) =>
+    Math.abs(a.race.year - race.year) - Math.abs(b.race.year - race.year)
+      || b.race.year - a.race.year)) {
+    const sameName = identityMatches(rider, year.finishers, (r) => r.person === rider.person,
+      (other) => agesCompatible(rider, other, race.year, year.race.year)
+        && results.every((result) =>
+          agesCompatible(result.rider, other, result.year, year.race.year)));
     const matches = year.race.year === race.year
       ? year.finishers.filter((r) => r.bib === rider.bib)
       : sameName.length > 1
@@ -227,12 +292,14 @@ export function estimateNextWave(rider, history, waves, race) {
           String(r.city ?? "").trim().toLowerCase() === String(rider.city ?? "").trim().toLowerCase())
         : sameName;
     if (matches.length === 1) {
-      results.push({ year: year.race.year, net: matches[0].net });
+      results.push({ year: year.race.year, net: matches[0].net, rider: matches[0] });
     }
   }
   if (results.length === 0) return null;
 
-  const best = results.sort((a, b) => a.net - b.net).slice(0, 3);
+  const best = results.filter((result) => result.year >= historyStart && result.year <= race.year)
+    .sort((a, b) => a.net - b.net).slice(0, 3);
+  if (best.length === 0) return null;
   const average = best.reduce((sum, result) => sum + result.net, 0) / best.length;
   const requirements = race.waveTimeRequirements;
   const projectedWave = requirements?.length

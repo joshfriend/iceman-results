@@ -2,8 +2,9 @@
 
 Usage: python3 scripts/download_athlinks.py
 
-The script downloads 2001–2024 event-course result pages concurrently and stores
+The script downloads 2001–2025 event-course result pages concurrently and stores
 the untouched API responses in data/<year>/raw/athlinks-results.json.
+Division metadata and result pages are saved alongside the overall results.
 """
 
 import concurrent.futures
@@ -71,11 +72,11 @@ def fetch_course_page(event_id, course_id, offset, expected=None):
     raise RuntimeError(f"Athlinks course {course_id} page {offset} could not be fetched")
 
 
-def deduplicate_rows(rows, course_id):
+def deduplicate_rows(rows, course_id, use_entry_ids=True):
     unique = {}
     for row in rows:
         entry_id = row.get("entryId")
-        key = ("entry", entry_id) if entry_id not in (None, 0) else (
+        key = ("entry", entry_id) if use_entry_ids and entry_id not in (None, 0) else (
             "fallback",
             str(row.get("bib", "")).strip(),
             row.get("displayName"),
@@ -84,16 +85,19 @@ def deduplicate_rows(rows, course_id):
         )
         if key in unique:
             if row != unique[key]:
-                raise ValueError(f"Athlinks course {course_id} has conflicting repeated rows")
+                changed = [field for field in row if row[field] != unique[key].get(field)]
+                raise ValueError(
+                    f"Athlinks course {course_id} has conflicting repeated rows for {key}: {changed}"
+                )
             continue
         unique[key] = row
     return list(unique.values())
 
 
-def api_url(event_id, course_id, offset):
+def api_url(event_id, course_id, offset, division_id=""):
     query = urllib.parse.urlencode({
         "eventCourseId": course_id,
-        "divisionId": "",
+        "divisionId": division_id,
         "intervalId": "",
         "from": offset,
         "limit": PAGE_SIZE,
@@ -137,6 +141,157 @@ def race_date(event):
     return event["raceDate"][:10]
 
 
+def division_group(page, course_id, division_id):
+    matches = [
+        group for group in page
+        if group.get("bracketId") == division_id
+        and (group.get("eventCourseId") == course_id or group.get("totalAthletes") == 0)
+    ]
+    if len(matches) != 1:
+        raise ValueError(f"Athlinks response has no unique division {division_id} for course {course_id}")
+    return matches[0]
+
+
+def fetch_division_page(event_id, course_id, division_id, offset, expected=None):
+    for attempt in range(5):
+        page = fetch_json(api_url(event_id, course_id, offset, division_id))
+        group = division_group(page, course_id, division_id) if page else None
+        if group is not None and group["totalAthletes"] > 0 and (
+            expected is None or group["totalAthletes"] == expected
+        ):
+            return page
+        if attempt < 4:
+            time.sleep(2**attempt)
+    if expected is None or offset >= expected - PAGE_SIZE:
+        return page
+    raise ValueError(f"Athlinks division {division_id} returned an incomplete page at {offset}")
+
+
+def write_divisions(event, courses):
+    year = int(event["raceDate"][:4])
+    event_id = int(event["raceID"])
+    folder = DATA / str(year) / "raw"
+    metadata_path = folder / "athlinks-metadata.json"
+    divisions_path = folder / "athlinks-divisions.json"
+    metadata = (
+        json.loads(metadata_path.read_text()) if metadata_path.exists()
+        else fetch_json(f"https://results.athlinks.com/metadata/event/{event_id}")
+    )
+    if metadata.get("eventId") != event_id:
+        raise ValueError(f"{metadata_path} contains the wrong event")
+    course_ids = {course["eventCourseID"] for course in courses}
+    selected = [
+        course for course in metadata["eventCourseMetadata"]
+        if course["eventCourseId"] in course_ids
+    ]
+    if {course["eventCourseId"] for course in selected} != course_ids:
+        raise ValueError(f"{metadata_path} is missing course metadata")
+    excluded = {"overall", "male", "female", "undefined", "relay", "team relay"}
+    wanted = {
+        (course["eventCourseId"], division["id"]): division["name"]
+        for course in selected for division in course["metadata"]["divisions"]
+        if division["name"].strip().lower() not in excluded
+    }
+    cached = {}
+    if divisions_path.exists():
+        existing = json.loads(divisions_path.read_text())
+        if existing["eventId"] != event_id:
+            raise ValueError(f"{divisions_path} contains the wrong event")
+        cached = {
+            (d["courseId"], d["divisionId"]): d for d in existing["divisions"]
+            if (d["totalAthletes"] > 0 or d.get("emptyChecked"))
+            and wanted.get((d["courseId"], d["divisionId"])) == d["name"]
+        }
+        if set(cached) == set(wanted):
+            print(f"{year}: divisions already downloaded", flush=True)
+            return
+
+    downloaded = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {
+            executor.submit(fetch_division_page, event_id, course_id, division_id, 0):
+                (course_id, division_id)
+            for course_id, division_id in wanted
+            if (course_id, division_id) not in cached
+        }
+        later = {}
+        for future in concurrent.futures.as_completed(futures):
+            course_id, division_id = futures[future]
+            page = future.result()
+            if page == []:
+                downloaded[(course_id, division_id)] = {
+                    "courseId": course_id, "divisionId": division_id,
+                    "name": wanted[(course_id, division_id)],
+                    "available": False, "totalAthletes": 0, "returnedResults": 0,
+                    "pages": [[]], "emptyChecked": True,
+                }
+                print(f"{year}: division {division_id} returned no result group", flush=True)
+                continue
+            group = division_group(page, course_id, division_id)
+            total = int(group["totalAthletes"])
+            downloaded[(course_id, division_id)] = {
+                "courseId": course_id, "divisionId": division_id,
+                "name": wanted[(course_id, division_id)],
+                "totalAthletes": total, "pages": [(0, page)],
+            }
+            if total == 0:
+                downloaded[(course_id, division_id)]["emptyChecked"] = True
+            for offset in range(PAGE_SIZE, total, PAGE_SIZE):
+                later[executor.submit(
+                    fetch_division_page, event_id, course_id, division_id, offset, total,
+                )] = (course_id, division_id, offset)
+        for future in concurrent.futures.as_completed(later):
+            course_id, division_id, offset = later[future]
+            page = future.result()
+            if not page:
+                downloaded[(course_id, division_id)]["pages"].append((offset, page))
+                continue
+            group = division_group(page, course_id, division_id)
+            result = downloaded[(course_id, division_id)]
+            if (
+                group["totalAthletes"] == 0
+                and not group["interval"]["intervalResults"]
+                and offset >= result["totalAthletes"] - PAGE_SIZE
+            ):
+                result["pages"].append((offset, page))
+                continue
+            if int(group["totalAthletes"]) != result["totalAthletes"]:
+                raise ValueError(
+                    f"Athlinks total changed for division {division_id} at {offset}: "
+                    f"{result['totalAthletes']} to {group['totalAthletes']}"
+                )
+            result["pages"].append((offset, page))
+
+    for (course_id, division_id), result in downloaded.items():
+        if not result.get("available", True):
+            continue
+        result["pages"].sort(key=lambda item: item[0])
+        try:
+            rows = deduplicate_rows([
+                row for _, page in result["pages"]
+                for row in (
+                    division_group(page, course_id, division_id)["interval"]["intervalResults"]
+                    if page else []
+                )
+            ], course_id, use_entry_ids=False)
+        except ValueError as error:
+            raise ValueError(f"Division {division_id} ({result['name']}): {error}") from error
+        highest = max((int(row["primaryBracketRank"] or 0) for row in rows), default=0)
+        if len(rows) > result["totalAthletes"] or (
+            len(rows) < result["totalAthletes"] and highest < result["totalAthletes"]
+        ):
+            raise ValueError(f"Incomplete results for Athlinks division {division_id}")
+        result["returnedResults"] = len(rows)
+        result["pages"] = [page for _, page in result["pages"]]
+    metadata_path.write_text(json.dumps(metadata, separators=(",", ":"), ensure_ascii=False))
+    cached.update(downloaded)
+    divisions_path.write_text(json.dumps({
+        "eventId": event_id,
+        "divisions": [cached[key] for key in sorted(wanted)],
+    }, separators=(",", ":"), ensure_ascii=False))
+    print(f"{year}: saved {len(wanted)} divisions", flush=True)
+
+
 def write_year(event, courses):
     year = int(event["raceDate"][:4])
     event_id = int(event["raceID"])
@@ -144,13 +299,14 @@ def write_year(event, courses):
     raw_folder = folder / "raw"
     raw_path = raw_folder / "athlinks-results.json"
     race_path = folder / "race.json"
+    existing_config = json.loads(race_path.read_text()) if race_path.exists() else None
     course_ids = {course["eventCourseID"] for course in courses}
     if raw_path.exists() and race_path.exists():
         existing = json.loads(raw_path.read_text())
-        existing_config = json.loads(race_path.read_text())
+        athlinks_config = existing_config.get("athlinksIdentity", existing_config)
         if (
             existing.get("eventId") == event_id
-            and existing_config.get("eventId") == event_id
+            and athlinks_config.get("eventId") == event_id
             and {course["courseId"] for course in existing.get("courses", [])} == course_ids
         ):
             print(f"{year}: already downloaded", flush=True)
@@ -251,7 +407,15 @@ def write_year(event, courses):
         "podiumDepth": 5,
         "sources": {"results": "raw/athlinks-results.json"},
     }
-    (folder / "race.json").write_text(json.dumps(config, indent=2) + "\n")
+    if existing_config and existing_config.get("resultsFormat") != "athlinks":
+        existing_config["athlinksIdentity"] = {
+            "eventId": event_id,
+            "courseIds": ordered_course_ids,
+            "resultsUrl": config["resultsUrl"],
+            "results": "raw/athlinks-results.json",
+        }
+        config = existing_config
+    race_path.write_text(json.dumps(config, indent=2) + "\n")
     total = sum(course["returnedResults"] for course in downloaded)
     listed = sum(course["totalAthletes"] for course in downloaded)
     count_note = f" ({listed} highest places)" if listed != total else ""
@@ -265,7 +429,7 @@ def main():
 
     events = [
         event for event in master["result"]["eventRaces"]
-        if 2001 <= int(event["raceDate"][:4]) <= 2024
+        if 2001 <= int(event["raceDate"][:4]) <= 2025
     ]
     events.sort(key=lambda event: event["raceDate"], reverse=True)
 
@@ -276,6 +440,14 @@ def main():
             print(f"{year}: no published results; skipping", flush=True)
             continue
         write_year(event, courses)
+        write_divisions(event, courses)
+        race_path = DATA / str(year) / "race.json"
+        config = json.loads(race_path.read_text())
+        if config["resultsFormat"] == "athlinks":
+            config["sources"]["divisions"] = "raw/athlinks-divisions.json"
+        else:
+            config["athlinksIdentity"]["divisions"] = "raw/athlinks-divisions.json"
+        race_path.write_text(json.dumps(config, indent=2) + "\n")
 
     print("Athlinks download complete", flush=True)
 

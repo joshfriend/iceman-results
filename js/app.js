@@ -410,8 +410,10 @@ function podiumFact(rider) {
   }
   return {
     label: "Behind podium",
-    value: `+${duration(result.gap)}`,
-    note: `${ordinal(result.place)} ${where} · ${ordinal(depth)} was ${hms(result.lastPodium.net)}`,
+    value: result.gap === null ? "–" : `+${duration(result.gap)}`,
+    note: `${ordinal(result.place)} ${where} · ${result.lastPodium
+      ? `${ordinal(result.lastPodium.divisionRank)} was ${hms(result.lastPodium.net)}`
+      : "podium time unavailable"}`,
     primary: true,
   };
 }

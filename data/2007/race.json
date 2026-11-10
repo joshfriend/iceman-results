@@ -14,6 +14,7 @@
   "waveSeconds": null,
   "podiumDepth": 5,
   "sources": {
-    "results": "raw/athlinks-results.json"
+    "results": "raw/athlinks-results.json",
+    "divisions": "raw/athlinks-divisions.json"
   }
 }

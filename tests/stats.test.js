@@ -14,6 +14,225 @@ const { riders: riders2001, finishers: finishers2001 } = parseRace(readJson("200
 const { riders: riders2024, finishers: finishers2024 } = parseRace(readJson("2024/results.json"));
 const josh = riders.find((r) => r.bib === 4026);
 
+test("cross-year matching allows elapsed years plus or minus one and silently excludes age conflicts", () => {
+  const rider = {
+    name: "Rider One", person: "rider-one", bib: 1, age: 40,
+    finished: true, net: 120, status: 1, wave: 1, raceYear: 2025,
+  };
+  const year = (year, riders) => ({ race: { year }, riders, finishers: riders });
+  for (const [gap, age, allowed] of [
+    [1, 38, true], [1, 39, true], [1, 40, true], [1, 37, false], [1, 41, false],
+    [5, 34, true], [5, 35, true], [5, 36, true], [5, 33, false], [5, 37, false],
+  ]) {
+    const other = { ...rider, raceYear: 2025 - gap, age, net: 100 };
+    const expected = allowed ? [other] : [];
+    assert.deepEqual(findYearRiders([rider], "1", [other]), expected);
+    const history = riderHistory(rider, [year(2025 - gap, [other])]);
+    assert.deepEqual(history.results.map((r) => r.rider), expected);
+    assert.deepEqual(history.ambiguousYears, []);
+    if (gap === 1) {
+      const estimate = estimateNextWave(rider, [year(2024, [other])],
+        [{ wave: 1, median: 100 }], { year: 2025 });
+      assert.equal(estimate?.average ?? null, allowed ? 100 : null);
+    }
+    assert.deepEqual(findYearRiders([other], "1", [rider]), allowed ? [rider] : []);
+  }
+});
+
+test("division age ranges validate missing ages without treating equipment or distance as age", () => {
+  const rider = { name: "Rider One", bib: 1, age: 47, raceYear: 2026 };
+  for (const [division, year, allowed] of [
+    ["M 39-39", 2016, false], ["M 37-37", 2016, true],
+    ["M4646", 2025, true], ["M4343", 2025, false],
+    ["Men 45", 2024, true], ["Men 42", 2024, false],
+    ["Women 45-47", 2025, true], ["Women 35-39", 2025, false],
+    ["Expert Men 35-39 - 27Mile", 2016, true],
+    ["All Women 12-18 - 27Mile", 2016, false],
+    ["Men 45+", 2025, true], ["Men 75+", 2025, false],
+    ["M75100", 2025, false], ["M 01-99", 2025, true],
+    ["Fat Bike Men U40", 2025, false], ["Men Single Speed 40+", 2025, true],
+    ["M Clydesdale 39 & Under", 2025, false], ["Junior Men 14-under", 2025, false],
+    ["Men Clydesdale", 2025, true], ["Pro & Cat 1", 2025, true],
+    ["Single Speed - 27Mile", 2025, true], ["M N/A", 2025, true], ["", 2025, true],
+  ]) {
+    const other = { name: rider.name, bib: 2, division, raceYear: year, age: null };
+    assert.deepEqual(findYearRiders([rider], "1", [other]), allowed ? [other] : [], division);
+  }
+  const publishedAge = {
+    name: rider.name, bib: 2, age: 46, division: "Men 35", raceYear: 2025,
+  };
+  assert.deepEqual(findYearRiders([rider], "1", [publishedAge]), [publishedAge]);
+});
+
+test("age validation disambiguates names and also checks matching Athlinks IDs", () => {
+  const rider = { name: "Rider One", bib: 1, age: 40, raceYear: 2025, athlinksRacerId: 123 };
+  const conflict = { ...rider, age: 20, raceYear: 2024 };
+  const compatible = { ...conflict, age: 39, athlinksRacerId: null };
+  assert.deepEqual(findYearRiders([rider], "1", [conflict, compatible]), []);
+  assert.deepEqual(findYearRiders([{ ...rider, athlinksRacerId: null }], "1",
+    [conflict, compatible]), [compatible]);
+  const missing = { ...compatible, age: 0 };
+  assert.deepEqual(findYearRiders([rider], "1", [missing]), [missing]);
+});
+
+test("category switches without age preserve matches and do not reset age validation", () => {
+  const rider = {
+    name: "Rider One", person: "rider-one", bib: 1, raceYear: 2026,
+    division: "Men 47", age: null, finished: true, net: 100, status: 1, wave: 1,
+  };
+  const makeYear = (year, division, age = null) => {
+    const other = { ...rider, raceYear: year, division, age };
+    return { race: { year }, riders: [other], finishers: [other] };
+  };
+  const current = { race: { year: 2026 }, riders: [rider], finishers: [rider] };
+  for (const category of ["Single Speed", "Singlespeed Men", "Tandem", "Single Speed - 27Mile"]) {
+    const history = [
+      makeYear(2022, "Men 43"),
+      makeYear(2023, "Men 38"),
+      makeYear(2024, category),
+      makeYear(2025, category),
+      current,
+    ];
+    const expected = [2022, 2024, 2025, 2026];
+    assert.deepEqual(riderHistory(rider, history).results.map((r) => r.year), expected, category);
+    assert.deepEqual(findYearRiders([rider], "1", history[3].riders), history[3].riders);
+    assert.deepEqual(findYearRiders(history[3].riders, "1", [rider]), [rider]);
+    assert.deepEqual(estimateNextWave(rider, history, [{ wave: 1, median: 100 }],
+      current.race).years, [2024, 2025, 2026]);
+
+    const selected = history[3].riders[0];
+    assert.deepEqual(riderHistory(selected, history).results.map((r) => r.year), expected, category);
+    const estimate = estimateNextWave(selected, history, [{ wave: 1, median: 100 }],
+      history[3].race);
+    assert.deepEqual(estimate.years, [2022, 2024, 2025]);
+
+    const withPublishedAge = makeYear(2025, category, 20);
+    assert.deepEqual(findYearRiders([rider], "1", withPublishedAge.riders), []);
+  }
+});
+
+test("history validates against accepted years as well as the selected year", () => {
+  const rider = {
+    name: "Rider One", person: "rider-one", bib: 1, wave: 1,
+    age: 40, net: 100, finished: true,
+  };
+  const earlier = { ...rider, age: 38, net: 110 };
+  const conflict = { ...rider, age: 39, net: 120 };
+  const history = [
+    { race: { year: 2025 }, riders: [rider], finishers: [rider] },
+    { race: { year: 2024 }, riders: [earlier], finishers: [earlier] },
+    { race: { year: 2023 }, riders: [conflict], finishers: [conflict] },
+  ];
+  assert.deepEqual(riderHistory(rider, history).results.map((r) => [r.year, r.timeChange]),
+    [[2024, null], [2025, -10]]);
+  assert.deepEqual(estimateNextWave(rider, history, [{ wave: 1, median: 100 }],
+    { year: 2025 }).years, [2024, 2025]);
+  const selected = { ...rider, age: null, division: "" };
+  history[0] = { race: { year: 2025 }, riders: [selected], finishers: [selected] };
+  assert.deepEqual(riderHistory(selected, history).results.map((r) => r.year), [2024, 2025]);
+});
+
+test("Jonathan Winters' age-inconsistent 2016 result is excluded without a warning", () => {
+  const history = dataIndex.years.map((entry) => parseRace(readJson(entry.path)));
+  const current = history.find((year) => year.race.year === 2026);
+  const selected = current.riders.find((r) => r.name === "Jonathan Winters");
+  const old = history.find((year) => year.race.year === 2016);
+  assert.equal(old.riders.find((r) => r.name === selected.name).division, "M 39-39");
+  const { results, ambiguousYears } = riderHistory(selected, history);
+  assert.deepEqual(results.map((r) => r.year), [2022, 2023, 2024, 2025, 2026]);
+  assert.deepEqual(ambiguousYears, []);
+  assert.deepEqual(findYearRiders(current.riders, String(selected.bib), old.riders), []);
+});
+
+test("cross-year matching prefers Athlinks IDs and rejects conflicting IDs on every surface", () => {
+  const rider = {
+    name: "Rider One", person: "rider-one", bib: 1, city: "Town",
+    athlinksRacerId: 123, finished: true, net: 120, status: 1, wave: 1,
+  };
+  const renamed = {
+    ...rider, name: "Different Spelling", person: "different-spelling", bib: 2, net: 100,
+  };
+  const conflicting = { ...rider, athlinksRacerId: 456, bib: 3, net: 90 };
+  const unlinked = { ...rider, athlinksRacerId: null, bib: 4, net: 110 };
+  const year = (year, riders) => ({ race: { year }, riders, finishers: riders });
+  const waves = [{ wave: 1, median: 120 }];
+  const race = { year: 2024 };
+  for (const [candidates, expected] of [
+    [[renamed, conflicting, unlinked], [renamed]],
+    [[conflicting], []],
+    [[conflicting, unlinked], [unlinked]],
+    [[{ ...unlinked, athlinksRacerId: 0 }], [{ ...unlinked, athlinksRacerId: 0 }]],
+    [[{ ...unlinked, athlinksRacerId: undefined }], [{ ...unlinked, athlinksRacerId: undefined }]],
+  ]) {
+    assert.deepEqual(findYearRiders([rider], "1", candidates), expected);
+    assert.deepEqual(riderHistory(rider, [year(2023, candidates)]).results.map((r) => r.rider), expected);
+    const estimate = estimateNextWave(rider, [year(2023, candidates)], waves, race);
+    assert.equal(estimate?.average ?? null, expected[0]?.net ?? null);
+  }
+  const selectedWithoutId = { ...rider, athlinksRacerId: null };
+  assert.deepEqual(findYearRiders([selectedWithoutId], "1", [conflicting]), [conflicting]);
+  assert.equal(riderHistory(selectedWithoutId, [year(2023, [conflicting])]).results.length, 1);
+  assert.equal(estimateNextWave(selectedWithoutId, [year(2023, [conflicting])], waves, race).average, 90);
+});
+
+test("duplicate Athlinks IDs remain ambiguous in rider history", () => {
+  const rider = { name: "Rider One", athlinksRacerId: 123 };
+  const candidates = [
+    { ...rider, name: "Spelling One" },
+    { ...rider, name: "Spelling Two" },
+  ];
+  assert.deepEqual(riderHistory(rider, [
+    { race: { year: 2023 }, riders: candidates, finishers: [] },
+  ]), { results: [], ambiguousYears: [2023] });
+});
+
+test("normalized Athlinks IDs are preserved but do not override conflicting published ages", () => {
+  const history = dataIndex.years.map((entry) => parseRace(readJson(entry.path)));
+  let linked = 0;
+  for (const year of history) {
+    if (year.race.year >= 2025) {
+      if (year.race.year === 2026) {
+        assert.ok(year.riders.every((r) => r.athlinksRacerId === null));
+      }
+      continue;
+    }
+    const raw = readJson(`${year.race.year}/raw/athlinks-results.json`);
+    const sourceIds = new Set(raw.courses.flatMap((course) => course.pages.flatMap((page) =>
+      page.filter((group) => group.eventCourseId === course.courseId)
+        .flatMap((group) => group.interval.intervalResults.map((r) => r.racerId || null)))));
+    assert.deepEqual(new Set(year.riders.map((r) => r.athlinksRacerId)), sourceIds);
+    linked += year.riders.filter((r) => r.athlinksRacerId !== null).length;
+  }
+  assert.equal(linked, 9749);
+  const selected = history.find((year) => year.race.year === 2024).riders
+    .find((r) => r.athlinksRacerId === 302506474);
+  assert.ok(selected);
+  const matches = riderHistory(selected, history).results;
+  assert.equal(matches.filter((r) => r.rider.athlinksRacerId === 302506474).length, 18);
+  assert.ok(!matches.some((r) => [2001, 2004, 2005, 2006, 2008].includes(r.year)));
+  assert.equal(history.filter((year) =>
+    year.riders.some((r) => r.athlinksRacerId === 302506474)).length, 23);
+});
+
+test("2025 supplements Athlinks IDs only on matching bib, name, gender, and finish time", () => {
+  const raw = readJson("2025/raw/athlinks-results.json");
+  const linked = riders2025.filter((r) => r.athlinksRacerId !== null);
+  assert.equal(linked.length, 63);
+  const source = raw.courses.flatMap((course) => course.pages.flatMap((page) =>
+    page.filter((group) => group.eventCourseId === course.courseId)
+      .flatMap((group) => group.interval.intervalResults)));
+  assert.equal(new Set(source.filter((r) => r.racerId).map((r) => r.racerId)).size, 63);
+  for (const rider of linked) {
+    const matches = source.filter((r) => Number(r.bib) === rider.bib);
+    assert.equal(matches.length, 1);
+    const other = matches[0];
+    assert.equal(rider.athlinksRacerId, other.racerId);
+    assert.equal(rider.name.trim().toLowerCase(), other.displayName.trim().toLowerCase());
+    assert.equal(rider.gender, other.gender);
+    assert.equal(rider.net, Math.round(other.time.timeInMillis / 1000));
+  }
+});
+
 test("rider history matches full names across all years and orders results chronologically", () => {
   const rider = { name: "Rider One", person: "shared", bib: 12, finished: true, net: 120, status: 2 };
   const year = (year, riders) => ({
@@ -155,6 +374,49 @@ test("supports archived results without start-wave data", () => {
     .map((group) => group.key), ["overall", "gender"]);
 });
 
+test("historical divisions are recovered without inventing unpublished memberships", () => {
+  let withDivision = 0;
+  let missing = 0;
+  for (const entry of dataIndex.years.filter((entry) => entry.year <= 2024)) {
+    const { riders, finishers, race } = parseRace(readJson(entry.path));
+    const listed = riders.filter((r) => r.division);
+    withDivision += listed.length;
+    missing += riders.length - listed.length;
+    assert.ok(listed.every((r) => Number.isInteger(r.divisionRank) && r.divisionRank > 0));
+    if (![2001, 2010].includes(entry.year)) assert.equal(listed.length, riders.length);
+    const selected = finishers.find((r) => r.division);
+    assert.ok(groupsFor(selected, finishers, race).some((g) => g.key === "division"));
+  }
+  assert.equal(withDivision, 70954);
+  assert.equal(missing, 52);
+});
+
+test("2025 retains all primary divisions despite the less complete Athlinks divisions", () => {
+  const raw = readJson("2025/raw/overall-results.json");
+  const headings = raw.pages[0].headings.map((h) => h.name);
+  const source = raw.pages.flatMap((page) => page.resultSet.results);
+  for (let i = 0; i < source.length; i++) {
+    assert.equal(riders2025[i].division, source[i][headings.indexOf("Age Group")].trim());
+    const rank = Number(source[i][headings.indexOf("Age Place")]);
+    assert.equal(riders2025[i].divisionRank, rank > 0 ? rank : null);
+  }
+});
+
+test("podium gaps handle historical ties and unavailable podium times", async () => {
+  const { podium } = await import("../js/stats.js");
+  const rider = { division: "Example", divisionRank: 6, net: 200, finished: true };
+  const tied = { ...rider, divisionRank: 4, net: 100 };
+  const result = podium(rider, [tied, { ...tied }, rider], 5);
+  assert.equal(result.gap, 100);
+  assert.equal(result.lastPodium.divisionRank, 4);
+  assert.equal(podium(rider, [rider], 5).gap, null);
+  assert.equal(podium({ ...rider, divisionRank: null }, [rider], 5), null);
+  const data = parseRace(readJson("2014/results.json"));
+  const historic = data.finishers.find((r) => r.division === "ICEBIKE MEN" && r.divisionRank === 6);
+  assert.ok(historic);
+  assert.ok(Number.isFinite(podium(historic, data.finishers, 5).gap));
+});
+
 test("loads the oldest and newest Athlinks datasets without inventing bibs or waves", () => {
   assert.equal(riders2001.length, 1888);
   assert.equal(finishers2001.length, 1888);
@@ -292,6 +554,19 @@ test("finds riders by bib or name", () => {
   assert.deepEqual(findRiders(riders, "lauren h").map((r) => r.bib), [1608]);
   assert.ok(findRiders(riders, "laur").some((r) => r.bib === 2462));
   assert.deepEqual(findRiders(riders, "999999"), []);
+});
+
+test("sorts matching names alphabetically without case sensitivity", () => {
+  const matches = [
+    { name: "zoe Rider", bib: 3 },
+    { name: "ALICE Rider", bib: 2 },
+    { name: "Bob Rider", bib: 1 },
+  ];
+  assert.deepEqual(findRiders(matches, "rider").map((r) => r.name), [
+    "ALICE Rider",
+    "Bob Rider",
+    "zoe Rider",
+  ]);
 });
 
 test("podium gap is measured to the division's 5th place", async () => {
