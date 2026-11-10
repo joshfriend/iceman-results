@@ -92,7 +92,6 @@ $("source-note").textContent = hasStartData
   : hasWaveData ? " with wave assignments; scheduled start times unavailable."
     : " (start-wave data unavailable for this year).";
 $("passes").hidden = !hasStartData;
-$("pass-note").hidden = !hasStartData;
 $("wave-results").hidden = !hasWaveData;
 
 $("event").addEventListener("change", () => {
@@ -317,7 +316,6 @@ function show(rider) {
   const hasRiderWave = Number.isFinite(rider.start) && Number.isFinite(rider.clock)
     && Number.isInteger(rider.wave);
   $("passes").hidden = !hasRiderWave;
-  $("pass-note").hidden = !hasRiderWave;
   $("pass-distribution").hidden = !hasRiderWave;
   $("wave-results").hidden = !rider.finished || waves.length === 0;
   $("report").hidden = false;
