@@ -223,12 +223,18 @@ export function passCounts(rider, finishers) {
     return { passed: 0, passedBy: 0, net: 0 };
   }
   for (const other of comparisonField(rider, finishers)) {
-    if (other.bib === rider.bib) continue;
+    if (other === rider) continue;
     if (!Number.isFinite(other.start) || !Number.isFinite(other.clock)) continue;
     if (other.start <= rider.start && other.clock > rider.clock) passed++;
     if (other.start >= rider.start && other.clock < rider.clock) passedBy++;
   }
   return { passed, passedBy, net: passed - passedBy };
+}
+
+export function passDistribution(rider, finishers) {
+  const field = comparisonField(rider, finishers)
+    .filter((other) => Number.isFinite(other.start) && Number.isFinite(other.clock));
+  return field.map((other) => ({ rider: other, ...passCounts(other, field) }));
 }
 
 // Division podium status; off the podium, the gap is to the last podium place (race.podiumDepth).

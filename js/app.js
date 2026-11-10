@@ -2,9 +2,9 @@ import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
 import {
   clockTime, comparisonRank, duration, estimateNextWave, findRiders, findYearRiders,
-  groupsFor, hm, hms, kde, ordinal, parseRace, passCounts, podium, riderHistory, waveDistributions,
+  groupsFor, hm, hms, kde, ordinal, parseRace, passCounts, passDistribution, podium, riderHistory, waveDistributions,
   winnerGaps, raceRecap, selectRaceEvent,
-} from "./stats.js?v=5";
+} from "./stats.js?v=6";
 
 const AWARDS = {
   1: { name: "Gold", color: "#c9a227" },
@@ -56,6 +56,7 @@ const data = selectRaceEvent(
   parseRace(await (await fetch(`data/${yearEntry.path}`)).json()), raceKey, eventInfo.name,
 );
 const raceCache = new Map([[data.race.year, Promise.resolve(data)]]);
+const passDistributions = new Map();
 let historyRequest = 0;
 function loadRace(entry) {
   if (!raceCache.has(entry.year)) {
@@ -317,6 +318,7 @@ function show(rider) {
     && Number.isInteger(rider.wave);
   $("passes").hidden = !hasRiderWave;
   $("pass-note").hidden = !hasRiderWave;
+  $("pass-distribution").hidden = !hasRiderWave;
   $("wave-results").hidden = !rider.finished || waves.length === 0;
   $("report").hidden = false;
   $("details").hidden = !rider.finished;
@@ -359,9 +361,68 @@ function show(rider) {
   $("passed").textContent = fmt(counts.passed);
   $("passed-by").textContent = fmt(counts.passedBy);
   $("net").textContent = `${counts.net > 0 ? "+" : ""}${fmt(counts.net)}`;
+  drawPassDistribution(rider, counts.passed);
 
   drawCurves(rider);
   drawWaves(rider);
+}
+
+function drawPassDistribution(rider, passed) {
+  const field = rider.raceGroup ?? "amateur";
+  if (!passDistributions.has(field)) {
+    passDistributions.set(field, passDistribution(rider, data.finishers));
+  }
+  const values = passDistributions.get(field).map((entry) => entry.passed);
+  const lower = values.filter((value) => value < passed).length;
+  const summary = `${fmt(values.length)} ${field} finishers with known start times. `
+    + `You passed ${fmt(passed)} riders, more than ${(lower / values.length * 100).toFixed(1)}% `
+    + `of this field (ties not counted). Median: ${fmt(d3.median(values))} passes.`;
+  $("pass-distribution-summary").textContent =
+    `More passes than ${(lower / values.length * 100).toFixed(1)}% of field`;
+  $("pass-distribution-summary").title = summary;
+  $("pass-chart").replaceChildren();
+
+  const width = 300, height = 130;
+  const margin = { top: 22, right: 14, bottom: 24, left: 14 };
+  const max = d3.max(values);
+  const hi = Math.max(10, Math.ceil(max * 1.05 / 10) * 10);
+  const x = d3.scaleLinear([0, hi], [margin.left, width - margin.right]);
+  const xs = d3.range(301).map((i) => i * hi / 300);
+  const density = kde(values, xs);
+  const points = xs.map((value, i) => [value, density[i]]);
+  const split = [passed, kde(values, [passed])[0]];
+  const at = d3.bisector((point) => point[0]).left(points, passed);
+  const explanation = "Higher parts of the curve mean more riders with similar pass totals. "
+    + "The red line marks you; the dashed line is the median.";
+  const y = d3.scaleLinear([0, Math.max(d3.max(density), split[1]) * 1.16],
+    [height - margin.bottom, margin.top]);
+  const svg = d3.select($("pass-chart")).append("svg")
+    .attr("viewBox", `0 0 ${width} ${height}`).attr("role", "img")
+    .attr("aria-label", `Distribution of riders passed. ${summary} ${explanation}`);
+  svg.append("g").selectAll("line").data(x.ticks(3).filter(Number.isInteger))
+    .join("line").attr("class", "gridline")
+    .attr("x1", (value) => x(value)).attr("x2", (value) => x(value))
+    .attr("y1", margin.top).attr("y2", y(0));
+  const area = d3.area().x((point) => x(point[0])).y0(y(0)).y1((point) => y(point[1]));
+  svg.append("path").attr("d", area([...points.slice(0, at), split]))
+    .attr("fill", COLORS.slower).attr("opacity", 0.37);
+  svg.append("path").attr("d", area([split, ...points.slice(at)]))
+    .attr("fill", COLORS.blue).attr("opacity", 0.37);
+  svg.append("path").attr("d", d3.line().x((point) => x(point[0])).y((point) => y(point[1]))(points))
+    .attr("fill", "none").attr("stroke", COLORS.ink).attr("stroke-width", 1.7);
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${y(0)})`)
+    .call(d3.axisBottom(x).tickFormat(fmt).tickValues(x.ticks(3).filter(Number.isInteger)));
+  const med = d3.median(values);
+  svg.append("line").attr("x1", x(med)).attr("x2", x(med))
+    .attr("y1", margin.top).attr("y2", y(0))
+    .attr("stroke", COLORS.muted).attr("stroke-width", 1.4).attr("stroke-dasharray", "5 4");
+  svg.append("line").attr("x1", x(passed)).attr("x2", x(passed))
+    .attr("y1", margin.top - 4).attr("y2", y(0))
+    .attr("stroke", COLORS.red).attr("stroke-width", 2.6);
+  svg.append("text").attr("x", x(passed)).attr("y", margin.top - 10)
+    .attr("text-anchor", passed > max / 2 ? "end" : "start")
+    .attr("fill", COLORS.red).attr("font-size", 12).attr("font-weight", 700)
+    .text(`You: ${fmt(passed)}`);
 }
 
 function renderWaveEstimate(rider) {

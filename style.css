@@ -170,7 +170,7 @@ h3 { font-size: 1.3rem; margin: 40px 0 8px; }
 
 .passes {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.4fr);
   gap: 12px;
   margin-top: 20px;
 }
@@ -187,6 +187,9 @@ h3 { font-size: 1.3rem; margin: 40px 0 8px; }
 .tile-note { color: var(--muted); font-size: 0.85rem; }
 .passed .tile-value, .passed-by .tile-value { color: var(--accent); }
 .footnote { color: var(--muted); font-size: 0.8rem; margin: 10px 0 0; }
+#pass-chart { margin: 4px 0; }
+#pass-distribution[hidden] { display: none; }
+#pass-chart .axis text { font-size: 12px; }
 
 .wave-estimate { margin-top: 20px; }
 .wave-estimate h3 { margin-top: 0; }
@@ -273,7 +276,7 @@ footer a { color: var(--accent); }
   .recap-highlight { max-width: none; }
   .recap-breakdown { grid-template-columns: 1fr; }
   .fact:only-child { grid-column: 1 / -1; }
-  .passes { gap: 8px; }
+  .passes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .tile { padding: 12px 10px; }
   .tile-label { font-size: 0.7rem; }
   .tile-note { font-size: 0.72rem; }

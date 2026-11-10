@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 import {
   comparisonField, comparisonRank, estimateNextWave, findRiders, findYearRiders, groupsFor, juniorCategoryStats, kde, parseRace,
-  passCounts, proWaveStats, raceRecap, riderHistory, selectRaceEvent, waveDistributions, waveStats,
+  passCounts, passDistribution, proWaveStats, raceRecap, riderHistory, selectRaceEvent, waveDistributions, waveStats,
   winnerGaps,
 } from "../js/stats.js";
 
@@ -532,6 +532,61 @@ test("pass counts agree with a brute-force definition", () => {
     const passed = others.filter((o) => o.start <= rider.start && o.clock > rider.clock).length;
     const passedBy = others.filter((o) => o.start >= rider.start && o.clock < rider.clock).length;
     assert.deepEqual(passCounts(rider, finishers), { passed, passedBy, net: passed - passedBy });
+  }
+});
+
+test("pass distribution includes zeroes and ties, excludes missing timing, and separates fields", () => {
+  const field = [
+    { bib: null, start: 100, clock: 400 },
+    { bib: null, start: 100, clock: 400 },
+    { bib: 3, start: 200, clock: 300, raceGroup: "amateur" },
+    { bib: 4, start: 200, clock: 300, raceGroup: "amateur" },
+    { bib: 5, start: 100, clock: null },
+    { bib: 6, start: null, clock: 500 },
+    { bib: 7, start: 100, clock: 500, raceGroup: "pro" },
+    { bib: 8, start: 100, clock: 500, raceGroup: "junior" },
+  ];
+  assert.deepEqual(passDistribution(field[2], field), [
+    { rider: field[0], passed: 0, passedBy: 2, net: -2 },
+    { rider: field[1], passed: 0, passedBy: 2, net: -2 },
+    { rider: field[2], passed: 2, passedBy: 0, net: 2 },
+    { rider: field[3], passed: 2, passedBy: 0, net: 2 },
+  ]);
+  assert.deepEqual(passDistribution(field[6], field), [
+    { rider: field[6], passed: 0, passedBy: 0, net: 0 },
+  ]);
+  assert.deepEqual(passDistribution(field[0], field.slice(4, 6)), []);
+});
+
+test("pass distribution counts distinct riders even without bib numbers", () => {
+  const field = [
+    { bib: null, start: 100, clock: 400 },
+    { bib: null, start: 100, clock: 300 },
+  ];
+  assert.deepEqual(passDistribution(field[0], field), [
+    { rider: field[0], passed: 0, passedBy: 1, net: -1 },
+    { rider: field[1], passed: 1, passedBy: 0, net: 1 },
+  ]);
+});
+
+test("every rider in the real passing distribution agrees with the brute-force definition", () => {
+  const distribution = passDistribution(josh, finishers);
+  const field = comparisonField(josh, finishers)
+    .filter((rider) => Number.isFinite(rider.start) && Number.isFinite(rider.clock));
+  assert.equal(distribution.length, field.length);
+  assert.equal(distribution.find((entry) => entry.rider === josh).passed, 531);
+  for (const { rider, passed, passedBy, net } of distribution) {
+    let expectedPassed = 0, expectedPassedBy = 0;
+    for (const other of field) {
+      if (other === rider) continue;
+      if (other.start <= rider.start && other.clock > rider.clock) expectedPassed++;
+      if (other.start >= rider.start && other.clock < rider.clock) expectedPassedBy++;
+    }
+    assert.deepEqual({ passed, passedBy, net }, {
+      passed: expectedPassed,
+      passedBy: expectedPassedBy,
+      net: expectedPassed - expectedPassedBy,
+    });
   }
 });
 
