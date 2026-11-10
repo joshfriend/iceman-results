@@ -17,5 +17,17 @@
     "resultsUrl": "https://www.athlinks.com/event/35208/results/Event/1127439/Course/2693576/Results?page=1",
     "results": "raw/athlinks-results.json",
     "divisions": "raw/athlinks-divisions.json"
-  }
+  },
+  "additionalResults": [
+    {
+      "raceGroup": "junior",
+      "format": "registericeman",
+      "results": "raw/junior-results.json"
+    },
+    {
+      "raceGroup": "pro",
+      "format": "registericeman",
+      "results": "raw/pro-results.json"
+    }
+  ]
 }

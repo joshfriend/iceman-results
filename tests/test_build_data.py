@@ -1,11 +1,16 @@
+import io
 import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.build_data import athlinks_divisions, parse_athlinks, published_age, supplement_athlinks_ids
+from scripts.build_data import (
+    athlinks_divisions, parse_athlinks, parse_raceresult, parse_registericeman,
+    parse_start_list, published_age, race_group, supplement_athlinks_ids,
+)
 from scripts.download_athlinks import deduplicate_rows, division_group, fetch_division_page
+from scripts.download_supplemental import raceresult, registericeman
 
 
 class AthlinksIdentityTests(unittest.TestCase):
@@ -98,6 +103,33 @@ class AthlinksDivisionTests(unittest.TestCase):
         self.assertEqual((rider["division"], rider["divisionRank"], rider["status"]), ("M 40-44", 2, 10))
         self.assertIsNone(rider["wave"])
 
+    def test_nonfinish_status_overrides_positive_times_and_places(self):
+        for raw, expected in (("DNF", "DNF"), ("DNS", "DNS"), ("DQ", "DSQ"), ("DSQ", "DSQ")):
+            with self.subTest(status=raw):
+                row = {**self.row, "entryStatus": raw}
+                self.write_sources([row], [])
+                rider = parse_athlinks(self.overall_path, self.config)[0]
+                self.assertEqual(rider["status"], expected)
+                self.assertIsNone(rider["net"])
+                self.assertIsNone(rider["genderRank"])
+                self.assertIsNone(rider["divisionRank"])
+
+    def test_intermediate_splits_are_not_finishes_even_when_status_is_confirmed(self):
+        (self.folder / "raw/athlinks-metadata.json").write_text(json.dumps({
+            "eventId": 100, "eventCourseMetadata": [{
+                "eventCourseId": 20, "metadata": {"intervals": [
+                    {"name": "Full Course", "isFull": True},
+                    {"name": "Dockery", "isFull": False},
+                ]},
+            }],
+        }))
+        for name, status in (("Full Course", 10), ("Dockery", "DNF")):
+            row = {**self.row, "entryStatus": "CONF", "intervalName": name}
+            self.write_sources([row], [])
+            rider = parse_athlinks(self.overall_path, self.config)[0]
+            self.assertEqual(rider["status"], status)
+            self.assertEqual(rider["net"], 3600 if isinstance(status, int) else None)
+
     def test_ignores_gender_only_groups(self):
         self.group["bracketType"] = "GENDER"
         self.write_sources([self.row], [self.division])
@@ -183,3 +215,74 @@ class AthlinksDivisionTests(unittest.TestCase):
             with patch("scripts.download_athlinks.time.sleep"):
                 with self.assertRaisesRegex(ValueError, "incomplete page"):
                     fetch_division_page(100, 20, 30, 100, expected=300)
+
+
+class SupplementalResultsTests(unittest.TestCase):
+    def test_downloader_collects_every_junior_page(self):
+        source = json.loads(Path("data/2025/raw/junior-results.json").read_text())
+        pages = [io.StringIO(json.dumps(page)) for page in source["pages"]]
+        with patch("scripts.download_supplemental.urllib.request.urlopen", side_effect=pages) as fetch:
+            result = registericeman(605207)
+        self.assertEqual(fetch.call_count, 3)
+        self.assertEqual(sum(len(page["resultSet"]["results"]) for page in result["pages"]), 244)
+
+    def test_downloader_rejects_wrong_registericeman_result_set(self):
+        source = json.loads(Path("data/2025/raw/junior-results.json").read_text())
+        with patch("scripts.download_supplemental.urllib.request.urlopen",
+                   return_value=io.StringIO(json.dumps(source["pages"][0]))):
+            with self.assertRaisesRegex(ValueError, "wrong result set"):
+                registericeman(605208)
+
+    def test_downloader_checks_raceresult_list_and_completeness(self):
+        source = json.loads(Path("data/2026/raw/pro-results.json").read_text())
+        name = source["list"]["ListName"]
+        config = {"key": "public-test-key", "TabConfig": {"Lists": [{"Name": name}]}}
+        with patch("scripts.download_supplemental.fetch_json", return_value=source):
+            self.assertEqual(raceresult(config, name), source)
+            source["data"].pop()
+            with self.assertRaisesRegex(ValueError, "incomplete list"):
+                raceresult(config, name)
+        with self.assertRaisesRegex(ValueError, "no unique list"):
+            raceresult(config, "Wrong list")
+
+    def test_junior_results_do_not_require_corral_and_preserve_published_divisions(self):
+        path = Path("data/2025/raw/junior-results.json")
+        riders = list(parse_registericeman(path, 31500, 180))
+        self.assertEqual(len(riders), 244)
+        winner = riders[0]
+        self.assertEqual((winner["name"], winner["net"]), ("Rylan Zacharek", 7132))
+        self.assertIsNone(winner["start"])
+        self.assertIsNone(winner["wave"])
+        self.assertTrue(any("Romine" in rider["name"] for rider in riders))
+
+    def test_pro_times_use_total_clock_not_the_last_split(self):
+        riders = list(parse_registericeman(Path("data/2025/raw/pro-results.json"), 31500, 180))
+        self.assertEqual(len(riders), 123)
+        self.assertEqual(riders[0]["net"], 5975)
+        self.assertNotEqual(riders[0]["net"], 37 * 60 + 59)
+
+    def test_raceresult_pro_list_has_no_division_column(self):
+        riders = list(parse_raceresult(Path("data/2026/raw/pro-results.json")))
+        self.assertEqual(len(riders), 131)
+        self.assertEqual(riders[0]["net"], 5577)
+        self.assertEqual(riders[0]["division"], "")
+        self.assertTrue(all(rider["net"] is None for rider in riders
+                            if not isinstance(rider["status"], int)))
+
+    def test_junior_wave_is_published_number_not_a_formula_from_main_start(self):
+        starts = parse_start_list(Path("data/2026/raw/start-list.txt"))
+        self.assertEqual(starts["6003"], (12 * 3600, 49))
+
+    def test_classifies_only_published_age_and_category_evidence(self):
+        for division, age, expected in (
+            ("Pro/Expert Men - 27Mile", 17, "pro"),
+            ("F PAT & CAT 1", None, "pro"),
+            ("Junior Men U15", None, "junior"),
+            ("Men 15-18", None, "junior"),
+            ("Men 15-49", None, "amateur"),
+            ("Men 40", 40, "amateur"),
+            ("Single Speed", 16, "junior"),
+            ("M N/A", None, "amateur"),
+        ):
+            with self.subTest(division=division):
+                self.assertEqual(race_group({"division": division, "age": age}), expected)

@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
-  estimateNextWave, findRiders, findYearRiders, groupsFor, kde, parseRace, passCounts, riderHistory, waveStats,
+  comparisonField, comparisonRank, estimateNextWave, findRiders, findYearRiders, groupsFor, kde, parseRace,
+  passCounts, riderHistory, waveStats, winnerGaps,
 } from "../js/stats.js";
 
 const readJson = (path) => JSON.parse(readFileSync(new URL(`../data/${path}`, import.meta.url)));
@@ -197,11 +198,14 @@ test("normalized Athlinks IDs are preserved but do not override conflicting publ
       continue;
     }
     const raw = readJson(`${year.race.year}/raw/athlinks-results.json`);
-    const sourceIds = new Set(raw.courses.flatMap((course) => course.pages.flatMap((page) =>
+    const courses = [...raw.courses, ...(year.race.year === 2024
+      ? readJson("2024/raw/pro-results.json").courses : [])];
+    const sourceIds = new Set(courses.flatMap((course) => course.pages.flatMap((page) =>
       page.filter((group) => group.eventCourseId === course.courseId)
         .flatMap((group) => group.interval.intervalResults.map((r) => r.racerId || null)))));
     assert.deepEqual(new Set(year.riders.map((r) => r.athlinksRacerId)), sourceIds);
-    linked += year.riders.filter((r) => r.athlinksRacerId !== null).length;
+    linked += year.riders.filter((r) => r.athlinksRacerId !== null
+      && !(year.race.year === 2024 && r.raceGroup === "pro")).length;
   }
   assert.equal(linked, 9749);
   const selected = history.find((year) => year.race.year === 2024).riders
@@ -345,13 +349,15 @@ test("year changes handle unsubmitted names, missing bibs, and duplicate names",
 });
 
 test("loads every result row", () => {
-  assert.equal(riders.length, 4507);
-  assert.equal(finishers.length, 3667);
+  assert.equal(riders.length, 4900);
+  assert.equal(finishers.length, 4005);
+  assert.equal(riders.filter((r) => r.raceGroup === "junior").length, 262);
+  assert.equal(riders.filter((r) => r.raceGroup === "pro").length, 131);
 });
 
 test("loads 2025 Registericeman results, retaining finishers whose wave is unavailable", () => {
-  assert.equal(riders2025.length, 3811);
-  assert.equal(finishers2025.length, 3709);
+  assert.equal(riders2025.length, 4178);
+  assert.equal(finishers2025.length, 4067);
   assert.ok(finishers2025.every((r) => r.net !== null));
   assert.equal(finishers2025.filter((r) => r.wave !== null).length, 3708);
   const noCorralFinisher = riders2025.find((r) => r.bib === 4949);
@@ -382,12 +388,13 @@ test("historical divisions are recovered without inventing unpublished membershi
     const listed = riders.filter((r) => r.division);
     withDivision += listed.length;
     missing += riders.length - listed.length;
-    assert.ok(listed.every((r) => Number.isInteger(r.divisionRank) && r.divisionRank > 0));
+    assert.ok(listed.every((r) => r.finished
+      ? Number.isInteger(r.divisionRank) && r.divisionRank > 0 : r.divisionRank === null));
     if (![2001, 2010].includes(entry.year)) assert.equal(listed.length, riders.length);
     const selected = finishers.find((r) => r.division);
     assert.ok(groupsFor(selected, finishers, race).some((g) => g.key === "division"));
   }
-  assert.equal(withDivision, 70954);
+  assert.equal(withDivision, 71097);
   assert.equal(missing, 52);
 });
 
@@ -423,8 +430,8 @@ test("loads the oldest and newest Athlinks datasets without inventing bibs or wa
   assert.ok(riders2001.every((r) => r.start === null && r.wave === null));
   assert.equal(findRiders(riders2001, "Steve Tilford")[0].bib, 208);
   assert.ok(riders2001.some((r) => r.bib === null));
-  assert.equal(riders2024.length, 4105);
-  assert.equal(finishers2024.length, 4105);
+  assert.equal(riders2024.length, 4248);
+  assert.equal(finishers2024.length, 4179);
   assert.ok(riders2024.every((r) => r.start === null && r.wave === null));
 });
 
@@ -440,23 +447,24 @@ test("pass counts agree with a brute-force definition", () => {
   for (const bib of [4763, 309, 4026, 1185 /* DSQ, skipped */, 2000, 4500]) {
     const rider = finishers.find((r) => r.bib === bib);
     if (!rider) continue;
-    const others = finishers.filter((o) => o !== rider);
+    const others = comparisonField(rider, finishers)
+      .filter((o) => o !== rider && Number.isFinite(o.start) && Number.isFinite(o.clock));
     const passed = others.filter((o) => o.start <= rider.start && o.clock > rider.clock).length;
     const passedBy = others.filter((o) => o.start >= rider.start && o.clock < rider.clock).length;
     assert.deepEqual(passCounts(rider, finishers), { passed, passedBy, net: passed - passedBy });
   }
 });
 
-test("groups use official places and match the earlier charts", () => {
+test("groups separate race fields while preserving this amateur's chart values", () => {
   const groups = groupsFor(josh, finishers, race);
   assert.deepEqual(
     groups.map((g) => [g.title, g.n, g.rank]),
-    [["Overall", 3667, 1333], ["Men", 3357, 1286], ["Men 35", 63, 31], ["Wave 29 (10:09)", 76, 3]],
+    [["Amateur overall", 3667, 1333], ["Men", 3357, 1286], ["Men 35", 63, 31], ["Wave 29 (10:09)", 76, 3]],
   );
 });
 
-test("wave stats cover 45 waves", () => {
-  const waves = waveStats(finishers, race);
+test("amateur wave stats cover 45 waves, with junior/pro starts separate", () => {
+  const waves = waveStats(comparisonField(josh, finishers), race);
   assert.equal(waves.length, 45);
   const w29 = waves.find((w) => w.wave === 29);
   assert.equal(w29.n, 76);
@@ -550,7 +558,7 @@ test("finds riders by bib or name", () => {
   assert.deepEqual(findRiders(riders, " 4026 ").map((r) => r.name), ["Josh Friend"]);
   assert.ok(findRiders(riders, "friend josh").some((r) => r.bib === 4026));
   assert.deepEqual(findRiders(riders, "Lauren Henry").map((r) => r.bib), [1608]);
-  assert.deepEqual(findRiders(riders, "lauren").map((r) => r.bib), [1608, 3077, 4178]);
+  assert.deepEqual(findRiders(riders, "lauren").map((r) => r.bib), [6076, 1608, 3077, 4178]);
   assert.deepEqual(findRiders(riders, "lauren h").map((r) => r.bib), [1608]);
   assert.ok(findRiders(riders, "laur").some((r) => r.bib === 2462));
   assert.deepEqual(findRiders(riders, "999999"), []);
@@ -600,4 +608,129 @@ test("index lists every year folder, newest first, with matching counts", () => 
     assert.equal(yearData.finishers.length, entry.finishers);
   }
   assert.equal(josh.person, "josh-friend");
+});
+
+test("name variants require shared IDs rather than rider-specific aliases", () => {
+  const selected = { bib: 1, age: 60, raceYear: 2026, athlinksRacerId: 123,
+    finished: true, net: 200, wave: 5 };
+  const year = (riders) => ({ race: { year: 2025 }, riders, finishers: riders });
+  const waves = [{ wave: 1, median: 100 }];
+  for (const [name, otherName] of [
+    ["Bob Cooper", "Robert Cooper"],
+    ["Bob Cooper", "Robert Lee Cooper"],
+    ["Mike von Wihl", "Mike Vonwihl"],
+  ]) {
+    const rider = { ...selected, name, person: name.toLowerCase().replaceAll(" ", "-") };
+    const alternate = { ...rider, name: otherName,
+      person: otherName.toLowerCase().replaceAll(" ", "-"),
+      bib: 2, age: 59, raceYear: 2025, net: 100, athlinksRacerId: null };
+    assert.deepEqual(findRiders([rider], otherName), []);
+    assert.deepEqual(findYearRiders([rider], "1", [alternate]), []);
+    assert.deepEqual(riderHistory(rider, [year([alternate])]).results, []);
+    assert.equal(estimateNextWave(rider, [year([alternate])], waves, { year: 2026 }), null);
+    const linked = { ...alternate, athlinksRacerId: rider.athlinksRacerId };
+    assert.deepEqual(findYearRiders([rider], "1", [linked]), [linked]);
+    assert.equal(riderHistory(rider, [year([linked])]).results[0].rider, linked);
+    assert.equal(estimateNextWave(rider, [year([linked])], waves, { year: 2026 }).average, 100);
+  }
+});
+
+test("non-finishes and intermediate splits never become chart, benchmark, or wave times", () => {
+  const history = dataIndex.years.map((entry) => parseRace(readJson(entry.path)));
+  const old = history.find((year) => year.race.year === 2021);
+  for (const name of ["Doug Helland", "William Gallagher Jr."]) {
+    const rider = old.riders.find((r) => r.name === name);
+    assert.equal(rider.status, "DNF", name);
+    assert.equal(rider.net, null, name);
+    assert.ok(!old.finishers.includes(rider));
+    assert.equal(riderHistory(rider, [old]).results[0].net, null);
+  }
+  for (const year of history) {
+    assert.ok(year.finishers.every((r) => r.status > 0 && r.net > 0 && Number.isFinite(r.net)));
+    assert.ok(year.riders.filter((r) => !r.finished).every((r) => r.net === null));
+  }
+  const raw = parseRace({
+    race: { year: 2026 }, fields: ["bib", "status", "net"],
+    riders: [[1, "DNF", 10], [2, 0, 10], [3, 1, null], [4, 2, 0], [5, 3, 100]],
+  });
+  assert.deepEqual(raw.finishers.map((r) => r.bib), [5]);
+});
+
+test("amateur history and chart rankings remove pros and juniors without changing published places", () => {
+  const rider = { name: "Rider One", person: "rider-one", raceGroup: "amateur",
+    gender: "M", division: "Men 40", status: 4, genderRank: 4, net: 120, finished: true };
+  const pro = { ...rider, name: "Pro", raceGroup: "pro", net: 80, status: 1 };
+  const junior = { ...rider, name: "Junior", raceGroup: "junior", net: 90, status: 2 };
+  const tie = { ...rider, name: "Tie", status: 3 };
+  const slower = { ...rider, name: "Slower", net: 140, status: 5 };
+  const finishers = [pro, junior, tie, rider, slower];
+  assert.equal(comparisonRank(rider, finishers), 1);
+  assert.equal(rider.status, 4);
+  const groups = groupsFor(rider, finishers, {});
+  assert.deepEqual(groups.slice(0, 2).map((g) => [g.rank, g.n]), [[1, 3], [1, 3]]);
+  const result = riderHistory(rider, [{ race: { year: 2026 }, riders: finishers, finishers }]).results[0];
+  assert.equal(result.rank, 1);
+  assert.equal(result.fieldSize, 3);
+  assert.equal(result.aheadPct, 50);
+  assert.equal(groupsFor(pro, finishers, {})[0].n, 1);
+});
+
+test("same-gender winner gaps use elapsed-time percentages and exclude other fields from amateur results", () => {
+  const rider = { gender: "F", raceGroup: "amateur", division: "Women 40",
+    net: 150, finished: true };
+  const pro = { ...rider, raceGroup: "pro", net: 100, name: "Pro" };
+  const amateur = { ...rider, division: "Women 30", net: 120, name: "Amateur" };
+  const division = { ...rider, net: 125, name: "Division" };
+  const men = { ...pro, gender: "M", net: 50 };
+  const junior = { ...rider, raceGroup: "junior", net: 60 };
+  const finishers = [rider, pro, amateur, division, men, junior];
+  const gaps = winnerGaps(rider, finishers);
+  assert.deepEqual(gaps.map((g) => g.winner.name), ["Pro", "Amateur", "Division"]);
+  for (const [i, expected] of [50, 25, 20].entries()) {
+    assert.ok(Math.abs(gaps[i].percent - expected) < 1e-10);
+  }
+  assert.equal(winnerGaps(pro, finishers)[0].percent, 0);
+  assert.ok(winnerGaps(pro, finishers)[1].percent < 0);
+  assert.equal(winnerGaps(rider, [rider])[0].percent, null);
+  assert.equal(winnerGaps({ ...rider, finished: false }, finishers)[0].percent, null);
+  const unknown = { ...rider, raceGroup: "unclassified" };
+  assert.equal(winnerGaps(unknown, [unknown])[1].percent, null);
+});
+
+test("restored juniors are searchable in 2025 and 2026 with correct special-wave starts", () => {
+  assert.equal(riders2025.filter((r) => r.raceGroup === "junior").length, 244);
+  assert.ok(findRiders(riders2025, "Romine").some((r) => r.raceGroup === "junior"));
+  const junior = riders.find((r) => r.bib === 6003);
+  assert.equal(junior.raceGroup, "junior");
+  assert.equal(junior.wave, 49);
+  assert.equal(junior.start, 12 * 3600);
+  assert.equal(waveStats(comparisonField(junior, finishers), race)
+    .find((w) => w.wave === 49).start, 12 * 3600);
+  assert.equal(estimateNextWave(junior, [], waveStats(finishers, race), race), null);
+});
+
+test("wave estimates exclude invalid and special-race times and cover fractional cutoff boundaries", () => {
+  const rider = { bib: 1, person: "rider", finished: true, wave: 5, raceGroup: "amateur" };
+  const history = [{
+    race: { year: 2026 }, finishers: [{ ...rider, net: 110.5 }],
+  }, {
+    race: { year: 2025 }, finishers: [{ ...rider, raceGroup: "pro", net: 10 }],
+  }, {
+    race: { year: 2024 }, finishers: [{ ...rider, net: null }],
+  }];
+  const waves = [{ wave: 1, median: 100 }, { wave: 2, median: 200 }];
+  const result = estimateNextWave(rider, history, waves,
+    { year: 2026, waveTimeRequirements: [100, 110, 111] });
+  assert.equal(result.wave, 3);
+  assert.equal(result.waveMedian, null);
+  assert.deepEqual(result.years, [2026]);
+  assert.equal(result.average, 110.5);
+  assert.equal(estimateNextWave({ ...rider, raceGroup: "pro" }, history, waves, { year: 2026 }), null);
+});
+
+test("missing starts do not create phantom passes", () => {
+  const rider = { bib: 1, start: 100, clock: 200 };
+  const missing = { bib: 2, start: null, clock: null };
+  assert.deepEqual(passCounts(rider, [rider, missing]), { passed: 0, passedBy: 0, net: 0 });
+  assert.deepEqual(passCounts(missing, [rider, missing]), { passed: 0, passedBy: 0, net: 0 });
 });

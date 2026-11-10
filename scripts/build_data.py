@@ -23,15 +23,18 @@ RACE_NAME = "Iceman Cometh"
 
 FIELDS = [
     "bib", "person", "name", "city", "status", "net", "gender",
-    "genderRank", "division", "divisionRank", "start", "wave", "athlinksRacerId", "age",
+    "genderRank", "division", "divisionRank", "start", "wave", "athlinksRacerId", "age", "raceGroup",
 ]
 START_LINE = re.compile(r"^\s*(\d+)\s+(.+?)\s+(\d+)\s+(\d{2}:\d{2}:\d{2})\s+(\d+)\s*$")
 RANKED = re.compile(r"^\s*(.*?)\s*\((-?\d+)\)\s*$")
 
 
 def seconds(text):
-    h, m, s = map(int, text.split(":"))
-    return h * 3600 + m * 60 + s
+    parts = text.split(":")
+    if len(parts) == 2:
+        parts.insert(0, "0")
+    h, m = map(int, parts[:2])
+    return round(h * 3600 + m * 60 + float(parts[2]))
 
 
 def published_age(value):
@@ -59,21 +62,25 @@ def parse_start_list(path):
         match = START_LINE.match(line)
         if match:
             assert match[1] not in starts, f"duplicate start-list bib {match[1]}"
-            starts[match[1]] = seconds(match[4])
+            starts[match[1]] = (seconds(match[4]), int(match[3]))
     return starts
 
 
 def parse_raceresult(path):
     """RaceResult overall list: BIB, ID, place|status, name, city, net, BIB, gender (rank), division (rank)."""
-    for row in json.loads(path.read_text())["data"]:
+    source = json.loads(path.read_text())
+    has_division = any("CONTEST.NAME" in field for field in source["DataFields"])
+    for row in source["data"]:
         gender, gender_rank = ranked(row[7])
-        division, division_rank = ranked(row[8])
+        division, division_rank = ranked(row[8]) if has_division else ("", None)
+        status = int(row[2]) if row[2].isdigit() and int(row[2]) > 0 else row[2]
         yield {
             "bib": row[0],
             "name": row[3],
             "city": row[4],
-            "status": int(row[2]) if row[2].isdigit() else row[2],
-            "net": seconds(row[5]) if re.fullmatch(r"\d+:\d{2}:\d{2}", row[5]) else None,
+            "status": status,
+            "net": seconds(row[5]) if isinstance(status, int)
+            and re.fullmatch(r"\d+:\d{2}:\d{2}", row[5]) else None,
             "gender": gender,
             "genderRank": gender_rank,
             "division": division,
@@ -91,8 +98,10 @@ def parse_registericeman(path, first_start, wave_seconds):
     headings = {heading["name"]: i for i, heading in enumerate(pages[0]["headings"])}
     required = [
         "Place", "Bib", "Name", "Gender", "Gender Place", "Age Place",
-        "Age Group", "City", "Finish Time (Cumulative)", "Corral",
+        "Age Group", "City",
     ]
+    finish_heading = "Finish Time (Cumulative)" if "Finish Time (Cumulative)" in headings else "Clock Time"
+    required.append(finish_heading)
     missing = [heading for heading in required if heading not in headings]
     if missing:
         raise ValueError(f"{path} is missing columns: {', '.join(missing)}")
@@ -130,12 +139,12 @@ def parse_registericeman(path, first_start, wave_seconds):
         place = value(row, "Place")
         place = place_number(place)
         raw_status = str(value(row, "Place")).strip()
-        wave_match = re.fullmatch(r"Wave\s+(\d+)", str(value(row, "Corral")).strip())
+        wave_match = re.fullmatch(r"Wave\s+(\d+)", str(value(row, "Corral")).strip()) if "Corral" in headings else None
         wave = int(wave_match[1]) if wave_match else None
-        finish_text = str(value(row, "Finish Time (Cumulative)")).strip()
-        net = seconds(finish_text) if re.fullmatch(r"\d+:\d{2}:\d{2}", finish_text) else None
+        finish_text = str(value(row, finish_heading)).strip()
+        net = seconds(finish_text) if re.fullmatch(r"\d+:\d{2}(?::\d{2})?(?:\.\d+)?", finish_text) else None
 
-        if place is not None and net is not None:
+        if place is not None and place > 0 and net is not None and net > 0:
             status = place
             start = first_start + (wave - 1) * wave_seconds if wave is not None else None
         else:
@@ -218,6 +227,16 @@ def parse_athlinks(path, config):
     memberships = athlinks_divisions(
         path.parent.parent / division_source, source["eventId"], expected_course_ids,
     ) if division_source else {}
+    metadata_path = path.with_name("athlinks-metadata.json")
+    course_intervals = {}
+    if metadata_path.exists():
+        metadata = json.loads(metadata_path.read_text())
+        if metadata["eventId"] != source["eventId"]:
+            raise ValueError(f"{metadata_path} contains the wrong Athlinks event")
+        course_intervals = {
+            course["eventCourseId"]: course["metadata"]["intervals"]
+            for course in metadata["eventCourseMetadata"]
+        }
     matched_memberships = set()
     ambiguous_divisions = 0
     records = []
@@ -268,9 +287,18 @@ def parse_athlinks(path, config):
             raw_status = str(row.get("entryStatus", "")).upper()
             overall_rank = row.get("overallRank")
             overall_rank = int(overall_rank) if str(overall_rank).isdigit() else None
-            status = overall_rank if net is not None else {
+            nonfinish = {
                 "DNS": "DNS", "DSQ": "DSQ", "DQ": "DSQ", "DNF": "DNF",
-            }.get(raw_status, "DNF")
+            }.get(raw_status)
+            intervals = course_intervals.get(course["courseId"], [])
+            full_names = {interval["name"] for interval in intervals if interval["isFull"]}
+            if full_names and row.get("intervalName") not in full_names:
+                if row.get("intervalName") not in {interval["name"] for interval in intervals}:
+                    raise ValueError(f"{path} contains an unknown result interval")
+                nonfinish = nonfinish or "DNF"
+            if nonfinish:
+                net = None
+            status = nonfinish or (overall_rank if net is not None else "DNF")
             if net is not None and overall_rank is None and len(courses) == 1:
                 raise ValueError(f"{path} has a finish time without an overall place")
             division = course["courseName"] if config.get("divisionFromCourse") else ""
@@ -292,9 +320,9 @@ def parse_athlinks(path, config):
                 "status": status,
                 "net": net,
                 "gender": str(row.get("gender", "")).strip(),
-                "genderRank": row.get("genderRank"),
+                "genderRank": row.get("genderRank") if net is not None else None,
                 "division": division,
-                "divisionRank": division_rank,
+                "divisionRank": division_rank if net is not None else None,
                 "timeMs": time_ms if net is not None else None,
                 "entryId": row.get("entryId"),
                 "athlinksRacerId": row.get("racerId") or None,
@@ -369,6 +397,18 @@ def supplement_athlinks_ids(riders, athlinks_riders):
     return linked
 
 
+def race_group(rider):
+    division = rider["division"]
+    if re.search(r"\bpro\b|pro/1|\bcat\s*1\b", division, re.I):
+        return "pro"
+    ages = re.search(r"\b(?:men|women|m|f)\s+(\d{1,2})(?:\s*-\s*(\d{1,2}))?\b", division, re.I)
+    if (rider.get("age") is not None and rider["age"] <= 18
+            or re.search(r"\bjunior", division, re.I)
+            or ages and 0 < int(ages[2] or ages[1]) <= 18):
+        return "junior"
+    return "amateur"
+
+
 def build_year(folder):
     config = json.loads((folder / "race.json").read_text())
     first_start = seconds(config["firstStart"]) if config.get("firstStart") else None
@@ -390,20 +430,48 @@ def build_year(folder):
         linked = supplement_athlinks_ids(parsed_results, athlinks_riders)
         print(f"{config['year']}: supplemented {linked} Athlinks rider IDs")
 
+    for source in config.get("additionalResults", []):
+        path = folder / source["results"]
+        if source["format"] == "registericeman":
+            extra = parse_registericeman(path, first_start, wave_seconds)
+        elif source["format"] == "athlinks":
+            extra = parse_athlinks(path, source)
+        elif source["format"] == "raceresult":
+            extra = parse_raceresult(path)
+        else:
+            raise ValueError(f"Unknown additional results format: {source['format']}")
+        for rider in extra:
+            rider["raceGroup"] = source["raceGroup"]
+            if source["raceGroup"] == "pro":
+                rider["division"] = f"Pro/Cat 1 {rider['gender']}"
+                rider["divisionRank"] = rider["genderRank"]
+            parsed_results.append(rider)
+
+    bibs = [str(r["bib"]) for r in parsed_results if r["bib"] is not None]
+    if len(bibs) != len(set(bibs)) and config.get("additionalResults"):
+        raise ValueError(f"{folder}: duplicate bibs across result sets")
+    pro_genders = {
+        r["gender"] for r in parsed_results
+        if r.get("raceGroup", race_group(r)) == "pro"
+    }
     riders = []
     for r in parsed_results:
         r.setdefault("athlinksRacerId", None)
         r.setdefault("age", None)
+        r.setdefault("raceGroup", race_group(r))
+        if (config.get("resultsFormat") == "athlinks" and config["year"] < 2024
+                and r["raceGroup"] == "amateur" and r["gender"] not in pro_genders):
+            r["raceGroup"] = "unclassified"
         if config.get("resultsFormat") not in {"registericeman", "athlinks"}:
-            start = starts.get(r["bib"])
-            wave = None
-            if start is not None and start >= first_start and (start - first_start) % wave_seconds == 0:
-                wave = (start - first_start) // wave_seconds + 1
+            start, wave = starts.get(str(r["bib"]), (None, None))
+            if not wave and start is not None and r["raceGroup"] == "amateur":
+                if start >= first_start and (start - first_start) % wave_seconds == 0:
+                    wave = (start - first_start) // wave_seconds + 1
             r.update(bib=int(r["bib"]), person=person_key(r["name"]), start=start, wave=wave)
         if isinstance(r["status"], int):
             assert r["net"] is not None, f"finisher {r['bib']} lacks a time"
             if config.get("resultsFormat") not in {"athlinks", "registericeman"}:
-                assert r["wave"] is not None, f"finisher {r['bib']} lacks a wave"
+                assert r["wave"] is not None or r["raceGroup"] != "amateur", f"finisher {r['bib']} lacks a wave"
         riders.append([r[field] for field in FIELDS])
 
     finishers = sum(isinstance(r[FIELDS.index("status")], int) for r in riders)

@@ -1,8 +1,8 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
 import {
-  clockTime, duration, estimateNextWave, findRiders, findYearRiders, groupsFor, hm, hms, kde, ordinal, parseRace,
-  passCounts, podium, riderHistory, waveStats,
+  clockTime, comparisonField, comparisonRank, duration, estimateNextWave, findRiders, findYearRiders,
+  groupsFor, hm, hms, kde, ordinal, parseRace, passCounts, podium, riderHistory, waveStats, winnerGaps,
 } from "./stats.js";
 
 const AWARDS = {
@@ -57,7 +57,7 @@ const raceTitle = `${data.race.name} ${data.race.year}`;
 $("race-title").textContent = raceTitle;
 document.title = `${raceTitle} results`;
 const hasWaveData = data.finishers.some((r) => r.start !== null && r.wave !== null);
-const waves = waveStats(data.finishers, data.race);
+let waves = [];
 const overallMinutes = data.finishers.map((r) => r.net / 60).sort((a, b) => a - b);
 $("source").href = data.race.resultsUrl;
 $("source").textContent = data.race.sourceName;
@@ -201,7 +201,15 @@ function show(rider) {
   $("rider-chips").replaceChildren(
     chip("Bib", rider.bib ?? "Not listed"),
     chip("Division", rider.division || "None listed"),
+    chip("Field", rider.raceGroup),
   );
+  const field = comparisonField(rider, data.finishers);
+  waves = waveStats(field, data.race);
+  const hasRiderWave = Number.isFinite(rider.start) && Number.isFinite(rider.clock)
+    && Number.isInteger(rider.wave);
+  $("passes").hidden = !hasRiderWave;
+  $("pass-note").hidden = !hasRiderWave;
+  $("wave-results").hidden = !hasRiderWave;
   $("report").hidden = false;
   $("details").hidden = !rider.finished;
   document.title = `${rider.name} — ${raceTitle}`;
@@ -213,11 +221,18 @@ function show(rider) {
     return;
   }
   $("rider-status").textContent = "";
-  if (!hasWaveData) {
+  renderFacts(winnerGaps(rider, data.finishers).map((gap) => ({
+    label: gap.title,
+    value: gap.percent === null ? "Unavailable"
+      : `${gap.percent >= 0 ? "+" : ""}${gap.percent.toFixed(1)}%`,
+    note: gap.winner ? `${gap.winner.name} · ${hms(gap.winner.net)}` : "No published finisher in this category",
+  })), "winner-gaps");
+  if (!hasRiderWave) {
     $("wave-estimate").hidden = true;
     renderFacts([
-      { label: "Finish time", value: hms(rider.net), note: "official net time", primary: true },
-      { label: "Overall place", value: ordinal(rider.status) },
+      { label: "Finish time", value: hms(rider.net), note: "official finish time", primary: true },
+      { label: `${rider.raceGroup} place`, value: ordinal(comparisonRank(rider, data.finishers)),
+        note: `published overall: ${ordinal(rider.status)}` },
       podiumFact(rider),
     ]);
     drawCurves(rider);
@@ -225,7 +240,7 @@ function show(rider) {
   }
   renderWaveEstimate(rider);
   renderFacts([
-    { label: "Finish time", value: hms(rider.net), note: "official net time", primary: true },
+    { label: "Finish time", value: hms(rider.net), note: "official finish time", primary: true },
     podiumFact(rider),
     { label: "Start", value: clockTime(rider.start), note: `wave ${rider.wave}` },
     { label: "Finished at", value: hms(rider.clock), note: "time of day" },
@@ -257,10 +272,14 @@ function renderWaveEstimate(rider) {
   const benchmark = estimate.requirement
     ? `Wave ${estimate.wave} requirement: ${estimate.requirementType === "or slower"
       ? `${hms(estimate.requirement)} or slower`
-      : `faster than ${hms(estimate.requirement)}`}; its ${data.race.year} median was ${hms(estimate.waveMedian)}.`
+      : `faster than ${hms(estimate.requirement)}`}${estimate.waveMedian === null
+      ? "; no finishers with a published start in this wave."
+      : `; its ${data.race.year} median was ${hms(estimate.waveMedian)}.`}`
     : `The closest ${data.race.year} wave median was ${hms(estimate.waveMedian)}.`;
   $("wave-estimate-note").textContent =
-    `Based on ${resultLabel} (${estimate.years.join(", ")}): ${hms(estimate.average)}. ${benchmark}`;
+    `Based on ${resultLabel} (${estimate.years.join(", ")}): ${hms(estimate.average)}. ${benchmark} `
+    + (estimate.requirement ? "This is time eligibility, not a predicted assignment; capacity and requested moves can change your wave."
+      : "This compares pace with wave medians, not official qualifying cutoffs or a predicted assignment.");
 }
 
 async function renderHistory(rider) {
@@ -296,7 +315,7 @@ async function renderHistory(rider) {
       for (const value of [
         result.net === null ? String(result.rider.status) : hms(result.net),
         change === null ? "—" : change === 0 ? "No change" : `${change < 0 ? "−" : "+"}${duration(Math.abs(change))}`,
-        result.net === null ? "—" : `${fmt(result.rider.status)} / ${fmt(result.fieldSize)}`,
+        result.net === null ? "—" : `${fmt(result.rank)} / ${fmt(result.fieldSize)} (${result.rider.raceGroup ?? "amateur"})`,
         result.aheadPct === null ? "—" : `${result.aheadPct.toFixed(1)}%`,
       ]) {
         const cell = document.createElement("td");
@@ -418,9 +437,9 @@ function podiumFact(rider) {
   };
 }
 
-function renderFacts(facts) {
-  $("rider-facts").style.setProperty("--cols", facts.length);
-  $("rider-facts").replaceChildren(...facts.map(({ label, value, note, primary, accent }) => {
+function renderFacts(facts, target = "rider-facts") {
+  $(target).style.setProperty("--cols", facts.length);
+  $(target).replaceChildren(...facts.map(({ label, value, note, primary, accent }) => {
     const item = document.createElement("div");
     item.className = primary ? "fact primary" : "fact";
     if (accent) item.style.setProperty("--accent", accent);

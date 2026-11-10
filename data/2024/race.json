@@ -15,5 +15,16 @@
   "sources": {
     "results": "raw/athlinks-results.json",
     "divisions": "raw/athlinks-divisions.json"
-  }
+  },
+  "additionalResults": [
+    {
+      "raceGroup": "pro",
+      "format": "athlinks",
+      "results": "raw/pro-results.json",
+      "eventId": 1093362,
+      "courseIds": [
+        2525753
+      ]
+    }
+  ]
 }

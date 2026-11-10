@@ -39,7 +39,23 @@
       <p id="rider-status" class="message"></p>
     </section>
 
+    <section id="rider-history" aria-labelledby="history-title">
+      <h3 id="history-title">Year-by-year progress</h3>
+      <p id="history-message" class="message" role="status"></p>
+      <div id="history-charts" class="curves"></div>
+      <div class="scroll-x">
+        <table id="history-table" class="history-table" hidden>
+          <thead><tr><th scope="col">Year</th><th scope="col">Finish / status</th><th scope="col">Time change</th><th scope="col">Field place</th><th scope="col">Ahead of field</th></tr></thead>
+          <tbody id="history-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
     <div id="details">
+    <section aria-labelledby="winner-gaps-title">
+      <h3 id="winner-gaps-title">Time behind the winners</h3>
+      <dl id="winner-gaps" class="facts"></dl>
+    </section>
     <section id="passes" class="passes" aria-label="Passing">
       <div class="tile passed">
         <span class="tile-label">You passed</span>
@@ -57,7 +73,7 @@
         <span class="tile-note">positions gained during the race</span>
       </div>
     </section>
-    <p id="pass-note" class="footnote">Pass counts compare each finisher's clock finish (scheduled wave start + official net time).</p>
+    <p id="pass-note" class="footnote">Pass counts compare finishers in your race field using their clock finish (scheduled wave start + official finish time).</p>
 
     <section>
       <h3>Finish times</h3>
@@ -70,26 +86,14 @@
       <div id="curves" class="curves"></div>
     </section>
 
-    <section id="rider-history" aria-labelledby="history-title">
-      <h3 id="history-title">Year-by-year progress</h3>
-      <p id="history-message" class="message" role="status"></p>
-      <div id="history-charts" class="curves"></div>
-      <div class="scroll-x">
-        <table id="history-table" class="history-table" hidden>
-          <thead><tr><th scope="col">Year</th><th scope="col">Finish / status</th><th scope="col">Time change</th><th scope="col">Overall place</th><th scope="col">Ahead of field</th></tr></thead>
-          <tbody id="history-rows"></tbody>
-        </table>
-      </div>
-    </section>
-
     <section id="wave-estimate" class="wave-estimate" aria-labelledby="wave-estimate-title" hidden>
-      <h3 id="wave-estimate-title">Next-time wave estimate</h3>
+      <h3 id="wave-estimate-title">Wave eligibility / pace estimate</h3>
       <div class="wave-estimate-card">
         <strong id="next-wave" class="wave-estimate-value"></strong>
         <span id="wave-movement"></span>
         <p id="wave-estimate-note" class="muted"></p>
       </div>
-      <p class="footnote">A rough estimate from available results, not an official wave assignment.</p>
+      <p class="footnote">Best three available amateur finishes in the five calendar years ending with the selected race. Cutoffs, when available, are the selected year's published standards, not confirmed next-year standards. Junior and pro starts are excluded. <a href="https://www.iceman.com/p/faq/wave-placements--start-times">Official wave guidance</a>.</p>
     </section>
 
     <section id="wave-results">

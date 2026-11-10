@@ -5,7 +5,9 @@ export function parseRace(json) {
   const riders = json.riders.map((row) => {
     const rider = Object.fromEntries(json.fields.map((field) => [field, row[index[field]]]));
     rider.raceYear = json.race.year;
-    rider.finished = Number.isInteger(rider.status);
+    rider.finished = Number.isInteger(rider.status) && rider.status > 0
+      && Number.isFinite(rider.net) && rider.net > 0;
+    if (Number.isInteger(rider.status) && !rider.finished) rider.status = "DNF";
     rider.clock = rider.finished && Number.isFinite(rider.start) ? rider.start + rider.net : null;
     return rider;
   });
@@ -49,6 +51,32 @@ export function findRiders(riders, query) {
 
 function searchWords(value) {
   return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+export function comparisonField(rider, finishers) {
+  return finishers.filter((other) => (other.raceGroup ?? "amateur") === (rider.raceGroup ?? "amateur"));
+}
+
+export function comparisonRank(rider, finishers) {
+  return comparisonField(rider, finishers).filter((other) => other.net < rider.net).length + 1;
+}
+
+export function winnerGaps(rider, finishers) {
+  const sameGender = finishers.filter((other) => other.gender === rider.gender);
+  return [
+    ["pro", "Top pro", sameGender.filter((other) => other.raceGroup === "pro")],
+    ["amateur", "Top amateur", sameGender.filter((other) => (other.raceGroup ?? "amateur") === "amateur")],
+    ["division", "Division winner", sameGender.filter((other) =>
+      rider.division && other.division === rider.division
+      && (other.raceGroup ?? "amateur") === (rider.raceGroup ?? "amateur"))],
+  ].map(([key, title, members]) => {
+    const winner = members.reduce((best, other) =>
+      !best || other.net < best.net ? other : best, null);
+    return {
+      key, title, winner,
+      percent: rider.finished && winner ? (rider.net / winner.net - 1) * 100 : null,
+    };
+  });
 }
 
 function ageRange(rider) {
@@ -133,12 +161,14 @@ export function riderHistory(rider, history) {
     const match = matches[0];
     accepted.push({ rider: match, year: year.race.year });
     const timed = match.finished && Number.isFinite(match.net) && match.net > 0;
-    const fieldSize = year.finishers.length;
-    const slower = timed ? year.finishers.filter((other) => other.net > match.net).length : 0;
+    const field = comparisonField(match, year.finishers);
+    const fieldSize = field.length;
+    const slower = timed ? field.filter((other) => other.net > match.net).length : 0;
     results.push({
       year: year.race.year,
       rider: match,
       fieldSize,
+      rank: timed ? comparisonRank(match, year.finishers) : null,
       net: timed ? match.net : null,
       aheadPct: timed && fieldSize > 1 ? slower / (fieldSize - 1) * 100 : null,
       timeChange: null,
@@ -158,8 +188,12 @@ export function riderHistory(rider, history) {
 export function passCounts(rider, finishers) {
   let passed = 0;
   let passedBy = 0;
-  for (const other of finishers) {
+  if (!Number.isFinite(rider.start) || !Number.isFinite(rider.clock)) {
+    return { passed: 0, passedBy: 0, net: 0 };
+  }
+  for (const other of comparisonField(rider, finishers)) {
     if (other.bib === rider.bib) continue;
+    if (!Number.isFinite(other.start) || !Number.isFinite(other.clock)) continue;
     if (other.start <= rider.start && other.clock > rider.clock) passed++;
     if (other.start >= rider.start && other.clock < rider.clock) passedBy++;
   }
@@ -170,7 +204,7 @@ export function passCounts(rider, finishers) {
 export function podium(rider, finishers, depth) {
   if (!rider.finished || !rider.division || !Number.isInteger(rider.divisionRank)
     || rider.divisionRank <= 0) return null;
-  const division = finishers.filter((r) => r.division === rider.division);
+  const division = comparisonField(rider, finishers).filter((r) => r.division === rider.division);
   const place = rider.divisionRank;
   if (place <= depth) return { onPodium: true, place, size: division.length };
   const last = division.filter((r) => r.divisionRank > 0 && r.divisionRank <= depth)
@@ -235,18 +269,22 @@ function summarize(key, title, members, rider, officialRank) {
 
 export function groupsFor(rider, finishers, race) {
   const gender = rider.gender === "F" ? "Women" : rider.gender === "M" ? "Men" : rider.gender;
+  const field = comparisonField(rider, finishers);
+  const groupTitle = {
+    amateur: "Amateur overall", pro: "Pro overall", junior: "Junior overall",
+    unclassified: "Overall (pro status unavailable)",
+  };
   const groups = [
-    summarize("overall", "Overall", finishers, rider, rider.status),
-    summarize("gender", gender, finishers.filter((r) => r.gender === rider.gender), rider,
-      rider.genderRank),
+    summarize("overall", groupTitle[rider.raceGroup] ?? "Overall", field, rider, null),
+    summarize("gender", gender, field.filter((r) => r.gender === rider.gender), rider, null),
   ];
   if (rider.division) {
     groups.push(summarize("division", rider.division,
-      finishers.filter((r) => r.division === rider.division), rider, rider.divisionRank));
+      field.filter((r) => r.division === rider.division), rider, rider.divisionRank));
   }
   if (rider.wave !== null && rider.wave !== undefined) {
     groups.push(summarize("wave", `Wave ${rider.wave} (${clockTime(rider.start)})`,
-      finishers.filter((r) => r.wave === rider.wave), rider, null));
+      field.filter((r) => r.wave === rider.wave), rider, null));
   }
   return groups;
 }
@@ -254,7 +292,7 @@ export function groupsFor(rider, finishers, race) {
 export function waveStats(finishers, race) {
   const byWave = new Map();
   for (const r of finishers) {
-    if (r.wave === null || r.wave === undefined) continue;
+    if (r.wave === null || r.wave === undefined || !Number.isFinite(r.start)) continue;
     if (!byWave.has(r.wave)) byWave.set(r.wave, []);
     byWave.get(r.wave).push(r.net);
   }
@@ -262,7 +300,7 @@ export function waveStats(finishers, race) {
     const times = byWave.get(wave);
     return {
       wave,
-      start: race.firstStart + (wave - 1) * race.waveSeconds,
+      start: finishers.find((r) => r.wave === wave).start,
       times,
       n: times.length,
       median: median(times),
@@ -274,19 +312,23 @@ export function waveStats(finishers, race) {
 }
 
 export function estimateNextWave(rider, history, waves, race) {
-  if (!rider.finished || !rider.person || !rider.wave || waves.length === 0) return null;
+  if (!rider.finished || !rider.person || !rider.wave || waves.length === 0
+    || (rider.raceGroup && rider.raceGroup !== "amateur")) return null;
 
   const historyStart = race.year - 4;
   const results = [];
   for (const year of [...history].sort((a, b) =>
     Math.abs(a.race.year - race.year) - Math.abs(b.race.year - race.year)
       || b.race.year - a.race.year)) {
-    const sameName = identityMatches(rider, year.finishers, (r) => r.person === rider.person,
+    const eligible = year.finishers.filter((r) => Number.isFinite(r.net) && r.net > 0
+      && (!r.raceGroup || r.raceGroup === "amateur"));
+    const sameName = identityMatches(rider, eligible, (r) =>
+      r.person === rider.person,
       (other) => agesCompatible(rider, other, race.year, year.race.year)
         && results.every((result) =>
           agesCompatible(result.rider, other, result.year, year.race.year)));
     const matches = year.race.year === race.year
-      ? year.finishers.filter((r) => r.bib === rider.bib)
+      ? eligible.filter((r) => r.bib === rider.bib)
       : sameName.length > 1
         ? sameName.filter((r) =>
           String(r.city ?? "").trim().toLowerCase() === String(rider.city ?? "").trim().toLowerCase())
@@ -303,8 +345,7 @@ export function estimateNextWave(rider, history, waves, race) {
   const average = best.reduce((sum, result) => sum + result.net, 0) / best.length;
   const requirements = race.waveTimeRequirements;
   const projectedWave = requirements?.length
-    ? requirements.findIndex((requirement, i) =>
-      i === requirements.length - 1 ? average >= requirement : average < requirement) + 1
+    ? requirements.slice(0, -1).findIndex((requirement) => average < requirement) + 1
       || requirements.length
     : waves.reduce((closest, wave) =>
       Math.abs(wave.median - average) < Math.abs(closest.median - average) ? wave : closest,
