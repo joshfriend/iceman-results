@@ -7,6 +7,174 @@
       "path": "2026/results.json",
       "riders": 4507,
       "finishers": 3667
+    },
+    {
+      "year": 2025,
+      "date": "2025-11-08",
+      "path": "2025/results.json",
+      "riders": 3811,
+      "finishers": 3709
+    },
+    {
+      "year": 2024,
+      "date": "2024-11-02",
+      "path": "2024/results.json",
+      "riders": 4105,
+      "finishers": 4105
+    },
+    {
+      "year": 2023,
+      "date": "2023-11-04",
+      "path": "2023/results.json",
+      "riders": 4138,
+      "finishers": 4138
+    },
+    {
+      "year": 2022,
+      "date": "2022-11-05",
+      "path": "2022/results.json",
+      "riders": 3592,
+      "finishers": 3592
+    },
+    {
+      "year": 2021,
+      "date": "2021-11-06",
+      "path": "2021/results.json",
+      "riders": 3517,
+      "finishers": 3517
+    },
+    {
+      "year": 2019,
+      "date": "2019-11-02",
+      "path": "2019/results.json",
+      "riders": 3981,
+      "finishers": 3981
+    },
+    {
+      "year": 2018,
+      "date": "2018-11-03",
+      "path": "2018/results.json",
+      "riders": 3848,
+      "finishers": 3848
+    },
+    {
+      "year": 2017,
+      "date": "2017-11-04",
+      "path": "2017/results.json",
+      "riders": 3679,
+      "finishers": 3679
+    },
+    {
+      "year": 2016,
+      "date": "2016-11-05",
+      "path": "2016/results.json",
+      "riders": 3854,
+      "finishers": 3854
+    },
+    {
+      "year": 2015,
+      "date": "2015-11-07",
+      "path": "2015/results.json",
+      "riders": 3624,
+      "finishers": 3624
+    },
+    {
+      "year": 2014,
+      "date": "2014-11-01",
+      "path": "2014/results.json",
+      "riders": 3292,
+      "finishers": 3292
+    },
+    {
+      "year": 2013,
+      "date": "2013-11-02",
+      "path": "2013/results.json",
+      "riders": 3975,
+      "finishers": 3975
+    },
+    {
+      "year": 2012,
+      "date": "2012-11-03",
+      "path": "2012/results.json",
+      "riders": 3877,
+      "finishers": 3877
+    },
+    {
+      "year": 2011,
+      "date": "2011-11-05",
+      "path": "2011/results.json",
+      "riders": 3512,
+      "finishers": 3512
+    },
+    {
+      "year": 2010,
+      "date": "2010-11-06",
+      "path": "2010/results.json",
+      "riders": 3300,
+      "finishers": 3300
+    },
+    {
+      "year": 2009,
+      "date": "2009-11-07",
+      "path": "2009/results.json",
+      "riders": 3137,
+      "finishers": 3137
+    },
+    {
+      "year": 2008,
+      "date": "2008-11-08",
+      "path": "2008/results.json",
+      "riders": 2206,
+      "finishers": 2206
+    },
+    {
+      "year": 2007,
+      "date": "2007-11-10",
+      "path": "2007/results.json",
+      "riders": 2100,
+      "finishers": 2100
+    },
+    {
+      "year": 2006,
+      "date": "2006-11-04",
+      "path": "2006/results.json",
+      "riders": 1920,
+      "finishers": 1920
+    },
+    {
+      "year": 2005,
+      "date": "2005-11-05",
+      "path": "2005/results.json",
+      "riders": 1989,
+      "finishers": 1989
+    },
+    {
+      "year": 2004,
+      "date": "2004-11-06",
+      "path": "2004/results.json",
+      "riders": 1697,
+      "finishers": 1697
+    },
+    {
+      "year": 2003,
+      "date": "2003-11-08",
+      "path": "2003/results.json",
+      "riders": 1881,
+      "finishers": 1881
+    },
+    {
+      "year": 2002,
+      "date": "2002-11-02",
+      "path": "2002/results.json",
+      "riders": 1894,
+      "finishers": 1894
+    },
+    {
+      "year": 2001,
+      "date": "2001-11-03",
+      "path": "2001/results.json",
+      "riders": 1888,
+      "finishers": 1888
     }
   ]
 }

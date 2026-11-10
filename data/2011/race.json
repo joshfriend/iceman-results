@@ -1,0 +1,18 @@
+{
+  "year": 2011,
+  "date": "2011-11-05",
+  "resultsUrl": "https://www.athlinks.com/event/35208/results/Event/189051/Course/269955/Results?page=1",
+  "resultsFormat": "athlinks",
+  "sourceName": "Athlinks results",
+  "eventId": 189051,
+  "courseIds": [
+    269955
+  ],
+  "divisionFromCourse": false,
+  "firstStart": null,
+  "waveSeconds": null,
+  "podiumDepth": 5,
+  "sources": {
+    "results": "raw/athlinks-results.json"
+  }
+}

@@ -10,15 +10,21 @@
 <body>
   <header class="masthead">
     <h1 id="race-title" class="eyebrow">Iceman Cometh</h1>
-    <form id="lookup" class="lookup" autocomplete="off">
-      <label for="query">Bib number or name</label>
-      <div class="lookup-row">
-        <input id="query" name="query" type="search" inputmode="search" placeholder="e.g. 4026" required>
-        <button type="submit">Show results</button>
+    <div class="search-controls">
+      <div class="year-picker">
+        <label for="year">Year</label>
+        <select id="year" name="year" aria-label="Race year"></select>
       </div>
-    </form>
-    <div id="matches" class="matches" hidden></div>
+      <form id="lookup" class="lookup" autocomplete="off">
+        <label for="query">Bib number or name</label>
+        <div class="lookup-row">
+          <input id="query" name="query" type="search" inputmode="search" placeholder="e.g. 4026" required>
+          <button type="submit">Show results</button>
+        </div>
+      </form>
+    </div>
     <p id="message" class="message" role="status"></p>
+    <div id="matches" class="matches" hidden></div>
   </header>
 
   <main id="report" hidden>
@@ -34,7 +40,7 @@
     </section>
 
     <div id="details">
-    <section class="passes" aria-label="Passing">
+    <section id="passes" class="passes" aria-label="Passing">
       <div class="tile passed">
         <span class="tile-label">You passed</span>
         <span id="passed" class="tile-value"></span>
@@ -48,11 +54,10 @@
       <div class="tile net">
         <span class="tile-label">Net</span>
         <span id="net" class="tile-value"></span>
-        <span class="tile-note">positions gained on the road</span>
+        <span class="tile-note">positions gained during the race</span>
       </div>
     </section>
-    <p class="footnote">Pass counts compare each finisher's clock finish (scheduled wave start + official net time).
-      They are estimates from results, not passes seen on course: repeated passes, DNFs and actual start positions inside a wave aren't counted.</p>
+    <p id="pass-note" class="footnote">Pass counts compare each finisher's clock finish (scheduled wave start + official net time).</p>
 
     <section>
       <h3>Finish times</h3>
@@ -65,7 +70,29 @@
       <div id="curves" class="curves"></div>
     </section>
 
-    <section>
+    <section id="rider-history" aria-labelledby="history-title">
+      <h3 id="history-title">Year-by-year progress</h3>
+      <p id="history-message" class="message" role="status"></p>
+      <div id="history-charts" class="curves"></div>
+      <div class="scroll-x">
+        <table id="history-table" class="history-table" hidden>
+          <thead><tr><th scope="col">Year</th><th scope="col">Finish / status</th><th scope="col">Time change</th><th scope="col">Overall place</th><th scope="col">Ahead of field</th></tr></thead>
+          <tbody id="history-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="wave-estimate" class="wave-estimate" aria-labelledby="wave-estimate-title" hidden>
+      <h3 id="wave-estimate-title">Next-time wave estimate</h3>
+      <div class="wave-estimate-card">
+        <strong id="next-wave" class="wave-estimate-value"></strong>
+        <span id="wave-movement"></span>
+        <p id="wave-estimate-note" class="muted"></p>
+      </div>
+      <p class="footnote">A rough estimate from available results, not an official wave assignment.</p>
+    </section>
+
+    <section id="wave-results">
       <h3>Finish times by wave</h3>
       <ul class="legend">
         <li><span class="swatch box"></span>Box: median ± 1 SD</li>
@@ -80,8 +107,8 @@
   </main>
 
   <footer>
-    Data: <a id="source" href="https://my.raceresult.com/421674/results">official overall results</a>
-    and the published start list. Not affiliated with the Iceman Cometh Challenge.
+    Data: <a id="source" href="https://my.raceresult.com/421674/results">official overall results</a><span id="source-note"> with start-wave information.</span>
+    Not affiliated with the Iceman Cometh Challenge.
   </footer>
 
   <script type="module" src="js/app.js"></script>

@@ -1,0 +1,18 @@
+{
+  "year": 2001,
+  "date": "2001-11-03",
+  "resultsUrl": "https://www.athlinks.com/event/35208/results/Event/103855/Course/143287/Results?page=1",
+  "resultsFormat": "athlinks",
+  "sourceName": "Athlinks results",
+  "eventId": 103855,
+  "courseIds": [
+    143287
+  ],
+  "divisionFromCourse": false,
+  "firstStart": null,
+  "waveSeconds": null,
+  "podiumDepth": 5,
+  "sources": {
+    "results": "raw/athlinks-results.json"
+  }
+}

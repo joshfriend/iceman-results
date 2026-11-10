@@ -1,0 +1,19 @@
+{
+  "year": 2007,
+  "date": "2007-11-10",
+  "resultsUrl": "https://www.athlinks.com/event/35208/results/Event/43310/Course/64069/Results?page=1",
+  "resultsFormat": "athlinks",
+  "sourceName": "Athlinks results",
+  "eventId": 43310,
+  "courseIds": [
+    64069,
+    64074
+  ],
+  "divisionFromCourse": false,
+  "firstStart": null,
+  "waveSeconds": null,
+  "podiumDepth": 5,
+  "sources": {
+    "results": "raw/athlinks-results.json"
+  }
+}

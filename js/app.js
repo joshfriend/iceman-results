@@ -1,8 +1,8 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
 import {
-  clockTime, duration, findRiders, groupsFor, hm, hms, kde, ordinal, parseRace, passCounts, podium,
-  waveStats,
+  clockTime, duration, estimateNextWave, findRiders, findYearRiders, groupsFor, hm, hms, kde, ordinal, parseRace,
+  passCounts, podium, riderHistory, waveStats,
 } from "./stats.js";
 
 const AWARDS = {
@@ -24,26 +24,88 @@ const $ = (id) => document.getElementById(id);
 const index = await (await fetch("data/index.json")).json();
 const requestedYear = Number(new URLSearchParams(location.search).get("year"));
 const yearEntry = index.years.find((y) => y.year === requestedYear) ?? index.years[0];
+for (const entry of index.years) {
+  $("year").add(new Option(String(entry.year), String(entry.year)));
+}
+$("year").value = String(yearEntry.year);
 if (requestedYear && yearEntry.year !== requestedYear) {
   const params = new URLSearchParams(location.search);
   params.delete("year");
-  history.replaceState(null, "", params.size ? `?${params}` : location.pathname);
+  window.history.replaceState(null, "", params.size ? `?${params}` : location.pathname);
 }
 const data = parseRace(await (await fetch(`data/${yearEntry.path}`)).json());
+const raceCache = new Map([[data.race.year, Promise.resolve(data)]]);
+let historyRequest = 0;
+function loadRace(entry) {
+  if (!raceCache.has(entry.year)) {
+    const request = fetch(`data/${entry.path}`).then(async (response) => {
+      if (!response.ok) throw new Error(`${entry.year}: HTTP ${response.status}`);
+      return parseRace(await response.json());
+    }).catch((error) => {
+      raceCache.delete(entry.year);
+      throw error;
+    });
+    raceCache.set(entry.year, request);
+  }
+  return raceCache.get(entry.year);
+}
+const hasBibData = data.riders.some((r) => Number.isInteger(r.bib));
+const raceHistory = await Promise.all(index.years
+  .filter((entry) => entry.year <= data.race.year && entry.year >= data.race.year - 4)
+  .map(loadRace));
 const raceTitle = `${data.race.name} ${data.race.year}`;
 $("race-title").textContent = raceTitle;
 document.title = `${raceTitle} results`;
+const hasWaveData = data.finishers.some((r) => r.start !== null && r.wave !== null);
 const waves = waveStats(data.finishers, data.race);
 const overallMinutes = data.finishers.map((r) => r.net / 60).sort((a, b) => a - b);
 $("source").href = data.race.resultsUrl;
+$("source").textContent = data.race.sourceName;
+$("source-note").textContent = hasWaveData
+  ? " with start-wave information."
+  : " (start-wave data unavailable for this year).";
+$("passes").hidden = !hasWaveData;
+$("pass-note").hidden = !hasWaveData;
+$("wave-results").hidden = !hasWaveData;
 
 $("lookup").addEventListener("submit", (event) => {
   event.preventDefault();
   lookup($("query").value);
 });
+$("year").addEventListener("change", async () => {
+  const entry = index.years.find((entry) => entry.year === Number($("year").value));
+  const params = new URLSearchParams({ year: entry.year });
+  const query = $("query").value.trim();
+  $("year").disabled = true;
+  $("query").disabled = true;
+  $("lookup").querySelector("button").disabled = true;
+  setMessage(`Loading ${entry.year} results...`);
+  try {
+    if (query) {
+      const response = await fetch(`data/${entry.path}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const nextData = parseRace(await response.json());
+      const matches = findYearRiders(data.riders, query, nextData.riders);
+      if (matches.length === 1) params.set("bib", matches[0].bib ?? matches[0].name);
+      else if (matches.length > 1) {
+        const current = findRiders(data.riders, query);
+        params.set("bib", current.length === 1 ? current[0].name : query);
+      }
+    }
+    location.assign(`?${params}`);
+  } catch (error) {
+    console.error("Could not switch race year", error);
+    $("year").value = String(data.race.year);
+    $("year").disabled = false;
+    $("query").disabled = false;
+    $("lookup").querySelector("button").disabled = false;
+    setMessage(`Could not load ${entry.year} results. Please try again.`, true);
+  }
+});
 window.addEventListener("popstate", () => {
-  const year = Number(new URLSearchParams(location.search).get("year"));
-  if (year && year !== data.race.year) location.reload();
+  const requested = Number(new URLSearchParams(location.search).get("year"));
+  const year = index.years.find((entry) => entry.year === requested) ?? index.years[0];
+  if (year.year !== data.race.year) location.reload();
   else loadFromUrl();
 });
 $("copy-link").addEventListener("click", async () => {
@@ -64,17 +126,18 @@ function loadFromUrl() {
 }
 
 // Shared links always pin the year, since bibs are reassigned every year.
-function setUrlBib(bib, replace = false) {
+function setUrlRider(rider, replace = false) {
   const params = new URLSearchParams();
   params.set("year", data.race.year);
-  params.set("bib", bib);
+  params.set("bib", rider.bib ?? rider.name);
   const url = `?${params}`;
   if (url === location.search) return;
-  if (replace) history.replaceState(null, "", url);
-  else history.pushState(null, "", url);
+  if (replace) window.history.replaceState(null, "", url);
+  else window.history.pushState(null, "", url);
 }
 
 function clearResult() {
+  historyRequest++;
   $("report").hidden = true;
   $("matches").hidden = true;
   $("matches").replaceChildren();
@@ -88,13 +151,17 @@ function setMessage(text, error = false) {
 }
 
 function lookup(query, push = true) {
+  historyRequest++;
   const matches = findRiders(data.riders, query);
   $("matches").hidden = true;
   $("matches").replaceChildren();
   if (matches.length === 0) {
     $("report").hidden = true;
-    setMessage(/^\s*\d+\s*$/.test(query)
-      ? `No rider with bib ${query.trim()} in the results.`
+    const isBib = /^\s*\d+\s*$/.test(query);
+    setMessage(isBib
+      ? hasBibData
+        ? `No rider with bib ${query.trim()} in the results.`
+        : "Bib numbers are not listed for this year; search by rider name instead."
       : `No rider named “${query.trim()}” in the results.`, true);
     return;
   }
@@ -106,10 +173,16 @@ function lookup(query, push = true) {
     for (const rider of matches.slice(0, 30)) {
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = `${rider.name} · #${rider.bib} · ${rider.division}`;
+      button.textContent = [
+        rider.name,
+        rider.bib === null ? "" : `#${rider.bib}`,
+        rider.city,
+        rider.division,
+      ].filter(Boolean).join(" · ");
       button.addEventListener("click", () => {
-        $("query").value = String(rider.bib);
-        lookup(String(rider.bib));
+        const query = rider.bib === null ? rider.name : String(rider.bib);
+        $("query").value = query;
+        lookup(query);
       });
       $("matches").append(button);
     }
@@ -117,7 +190,7 @@ function lookup(query, push = true) {
     return;
   }
   const rider = matches[0];
-  setUrlBib(rider.bib, !push);
+  setUrlRider(rider, !push);
   show(rider);
 }
 
@@ -126,18 +199,31 @@ function show(rider) {
   $("rider-name").textContent = rider.name;
   $("rider-city").textContent = rider.city;
   $("rider-chips").replaceChildren(
-    chip("Bib", rider.bib),
+    chip("Bib", rider.bib ?? "Not listed"),
     chip("Division", rider.division || "None listed"),
   );
   $("report").hidden = false;
   $("details").hidden = !rider.finished;
   document.title = `${rider.name} — ${raceTitle}`;
+  renderHistory(rider);
   if (!rider.finished) {
+    $("wave-estimate").hidden = true;
     renderFacts([{ label: "Result", value: rider.status }]);
     $("rider-status").textContent = `Listed as ${rider.status}, so there's no finish time to chart.`;
     return;
   }
   $("rider-status").textContent = "";
+  if (!hasWaveData) {
+    $("wave-estimate").hidden = true;
+    renderFacts([
+      { label: "Finish time", value: hms(rider.net), note: "official net time", primary: true },
+      { label: "Overall place", value: ordinal(rider.status) },
+      podiumFact(rider),
+    ]);
+    drawCurves(rider);
+    return;
+  }
+  renderWaveEstimate(rider);
   renderFacts([
     { label: "Finish time", value: hms(rider.net), note: "official net time", primary: true },
     podiumFact(rider),
@@ -152,6 +238,131 @@ function show(rider) {
 
   drawCurves(rider);
   drawWaves(rider);
+}
+
+function renderWaveEstimate(rider) {
+  const estimate = estimateNextWave(rider, raceHistory, waves, data.race);
+  $("wave-estimate").hidden = !estimate;
+  if (!estimate) return;
+
+  $("next-wave").textContent = `Wave ${estimate.wave}`;
+  $("wave-movement").textContent = estimate.wavesAhead > 0
+    ? `${estimate.wavesAhead} wave${estimate.wavesAhead === 1 ? "" : "s"} earlier than your current wave`
+    : estimate.wavesAhead < 0
+      ? `${Math.abs(estimate.wavesAhead)} wave${estimate.wavesAhead === -1 ? "" : "s"} later than your current wave`
+      : "about the same as your current wave";
+  const resultLabel = estimate.resultCount === 1
+    ? "your only available result"
+    : `your ${estimate.resultCount} best available results`;
+  const benchmark = estimate.requirement
+    ? `Wave ${estimate.wave} requirement: ${estimate.requirementType === "or slower"
+      ? `${hms(estimate.requirement)} or slower`
+      : `faster than ${hms(estimate.requirement)}`}; its ${data.race.year} median was ${hms(estimate.waveMedian)}.`
+    : `The closest ${data.race.year} wave median was ${hms(estimate.waveMedian)}.`;
+  $("wave-estimate-note").textContent =
+    `Based on ${resultLabel} (${estimate.years.join(", ")}): ${hms(estimate.average)}. ${benchmark}`;
+}
+
+async function renderHistory(rider) {
+  const request = ++historyRequest;
+  $("history-message").textContent = "Loading results across all years...";
+  $("history-message").classList.remove("error");
+  $("history-charts").replaceChildren();
+  $("history-table").hidden = true;
+  $("history-rows").replaceChildren();
+  try {
+    const history = await Promise.all(index.years.map(loadRace));
+    if (request !== historyRequest) return;
+    const { results, ambiguousYears } = riderHistory(rider, history);
+    const finishes = results.filter((result) => result.net !== null);
+    const message = [
+      `${results.length} matched year${results.length === 1 ? "" : "s"}`,
+      finishes.length < 2 ? "At least two finishes are needed to show a trend." : "",
+      ambiguousYears.length ? `Duplicate names: ${ambiguousYears.join(", ")} omitted.` : "",
+    ].filter(Boolean).join(" ");
+    $("history-message").textContent = message;
+    for (const result of results) {
+      const row = document.createElement("tr");
+      if (result.year === data.race.year) row.className = "selected-year";
+      const yearCell = document.createElement("th");
+      yearCell.scope = "row";
+      const link = document.createElement("a");
+      link.href = historyLink(result);
+      link.textContent = result.year;
+      if (result.year === data.race.year) link.setAttribute("aria-current", "true");
+      yearCell.append(link);
+      row.append(yearCell);
+      const change = result.timeChange;
+      for (const value of [
+        result.net === null ? String(result.rider.status) : hms(result.net),
+        change === null ? "—" : change === 0 ? "No change" : `${change < 0 ? "−" : "+"}${duration(Math.abs(change))}`,
+        result.net === null ? "—" : `${fmt(result.rider.status)} / ${fmt(result.fieldSize)}`,
+        result.aheadPct === null ? "—" : `${result.aheadPct.toFixed(1)}%`,
+      ]) {
+        const cell = document.createElement("td");
+        cell.textContent = value;
+        row.append(cell);
+      }
+      $("history-rows").append(row);
+    }
+    $("history-table").hidden = results.length === 0;
+    if (finishes.length >= 2) {
+      const yearDomain = d3.extent(finishes, (result) => result.year);
+      drawHistoryChart(finishes, {
+        title: "Finish time", note: "Lower is faster", key: "net",
+        format: hms, color: COLORS.blue, yearDomain,
+      });
+      drawHistoryChart(finishes.filter((result) => result.aheadPct !== null), {
+        title: "Ahead of field", note: "Higher is better; ties are not counted as behind you",
+        key: "aheadPct", format: (value) => `${value.toFixed(1)}%`, color: COLORS.teal, yearDomain,
+      });
+    }
+  } catch (error) {
+    if (request !== historyRequest) return;
+    console.error("Could not load rider history", error);
+    $("history-message").classList.add("error");
+    $("history-message").textContent = "Could not load all years. Search for the rider again to retry.";
+  }
+}
+
+function historyLink(result) {
+  return `?${new URLSearchParams({ year: result.year, bib: result.rider.bib ?? result.rider.name })}`;
+}
+
+function drawHistoryChart(results, { title, note, key, format, color, yearDomain }) {
+  if (results.length < 2) return;
+  const width = 520;
+  const height = 250;
+  const margin = { top: 16, right: 20, bottom: 40, left: 66 };
+  const card = d3.select($("history-charts")).append("article").attr("class", "card");
+  card.append("div").attr("class", "card-head").append("h4").text(title);
+  card.append("p").attr("class", "card-sub").text(note);
+  const x = d3.scaleLinear(yearDomain, [margin.left, width - margin.right]);
+  const [min, max] = d3.extent(results, (result) => result[key]);
+  const padding = Math.max((max - min) * 0.15, 60);
+  const y = d3.scaleLinear(key === "aheadPct" ? [0, 100] : [Math.max(0, min - padding), max + padding],
+    [height - margin.bottom, margin.top]).nice();
+  const svg = card.append("svg").attr("viewBox", `0 0 ${width} ${height}`)
+    .attr("role", "img").attr("aria-label", `${title} by year. ${note}. Values in the table below.`);
+  svg.append("g").selectAll("line").data(y.ticks(5)).join("line").attr("class", "gridline")
+    .attr("x1", margin.left).attr("x2", width - margin.right)
+    .attr("y1", (value) => y(value)).attr("y2", (value) => y(value));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(${margin.left},0)`)
+    .call(d3.axisLeft(y).ticks(5).tickFormat(format));
+  const ticks = x.ticks(5).filter(Number.isInteger);
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${height - margin.bottom})`)
+    .call(d3.axisBottom(x).tickValues(ticks).tickFormat(d3.format("d")).tickPadding(8));
+  svg.append("path").datum(results)
+    .attr("d", d3.line().x((result) => x(result.year)).y((result) => y(result[key])))
+    .attr("fill", "none").attr("stroke", color).attr("stroke-width", 2);
+  const points = svg.append("g").selectAll("a").data(results).join("a")
+    .attr("href", historyLink)
+    .attr("aria-label", (result) => `${result.year}: ${format(result[key])}, view result`);
+  points.append("circle")
+    .attr("cx", (result) => x(result.year)).attr("cy", (result) => y(result[key]))
+    .attr("r", (result) => result.year === data.race.year ? 6 : 4)
+    .attr("fill", (result) => result.year === data.race.year ? COLORS.red : color);
+  points.append("title").text((result) => `${result.year}: ${format(result[key])}`);
 }
 
 function chip(label, value) {

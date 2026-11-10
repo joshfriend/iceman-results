@@ -1,0 +1,18 @@
+{
+  "year": 2010,
+  "date": "2010-11-06",
+  "resultsUrl": "https://www.athlinks.com/event/35208/results/Event/147075/Course/201612/Results?page=1",
+  "resultsFormat": "athlinks",
+  "sourceName": "Athlinks results",
+  "eventId": 147075,
+  "courseIds": [
+    201612
+  ],
+  "divisionFromCourse": false,
+  "firstStart": null,
+  "waveSeconds": null,
+  "podiumDepth": 5,
+  "sources": {
+    "results": "raw/athlinks-results.json"
+  }
+}

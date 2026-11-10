@@ -1,0 +1,18 @@
+{
+  "year": 2018,
+  "date": "2018-11-03",
+  "resultsUrl": "https://www.athlinks.com/event/35208/results/Event/822422/Course/1446930/Results?page=1",
+  "resultsFormat": "athlinks",
+  "sourceName": "Athlinks results",
+  "eventId": 822422,
+  "courseIds": [
+    1446930
+  ],
+  "divisionFromCourse": false,
+  "firstStart": null,
+  "waveSeconds": null,
+  "podiumDepth": 5,
+  "sources": {
+    "results": "raw/athlinks-results.json"
+  }
+}

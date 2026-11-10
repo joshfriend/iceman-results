@@ -5,7 +5,7 @@ export function parseRace(json) {
   const riders = json.riders.map((row) => {
     const rider = Object.fromEntries(json.fields.map((field) => [field, row[index[field]]]));
     rider.finished = Number.isInteger(rider.status);
-    rider.clock = rider.finished ? rider.start + rider.net : null;
+    rider.clock = rider.finished && Number.isFinite(rider.start) ? rider.start + rider.net : null;
     return rider;
   });
   const finishers = riders.filter((r) => r.finished);
@@ -16,8 +16,83 @@ export function findRiders(riders, query) {
   const text = query.trim().toLowerCase();
   if (!text) return [];
   if (/^\d+$/.test(text)) return riders.filter((r) => r.bib === Number(text));
-  const words = text.split(/\s+/);
-  return riders.filter((r) => words.every((w) => r.name.toLowerCase().includes(w)));
+  const words = searchWords(text);
+  if (!words.length) return [];
+
+  const candidates = riders.flatMap((rider) => {
+    const nameWords = searchWords(rider.name);
+    if (nameWords.length === words.length && nameWords.every((word, i) => word === words[i])) {
+      return [{ rider, exact: words.length }];
+    }
+
+    const used = new Set();
+    let exact = 0;
+    for (const word of [...words].sort((a, b) => b.length - a.length)) {
+      const exactIndex = nameWords.findIndex((nameWord, i) => !used.has(i) && nameWord === word);
+      const index = exactIndex >= 0
+        ? exactIndex
+        : nameWords.findIndex((nameWord, i) => !used.has(i) && nameWord.startsWith(word));
+      if (index < 0) return [];
+      used.add(index);
+      if (nameWords[index] === word) exact++;
+    }
+    return [{ rider, exact }];
+  });
+  if (!candidates.length) return [];
+  const best = Math.max(...candidates.map(({ exact }) => exact));
+  return candidates.filter(({ exact }) => exact === best).map(({ rider }) => rider);
+}
+
+function searchWords(value) {
+  return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+export function findYearRiders(riders, query, nextRiders) {
+  const current = findRiders(riders, query);
+  if (current.length !== 1) {
+    return /^\s*\d+\s*$/.test(query) ? [] : findRiders(nextRiders, query);
+  }
+  const rider = current[0];
+  const name = searchWords(rider.name).join(" ");
+  const matches = nextRiders.filter((other) =>
+    rider.person && other.person
+      ? other.person === rider.person
+      : searchWords(other.name).join(" ") === name);
+  if (matches.length <= 1) return matches;
+  const sameCity = matches.filter((other) =>
+    String(other.city ?? "").trim().toLowerCase() === String(rider.city ?? "").trim().toLowerCase());
+  return sameCity.length === 1 ? sameCity : matches;
+}
+
+export function riderHistory(rider, history) {
+  const name = rider.name.trim().toLowerCase();
+  const results = [];
+  const ambiguousYears = [];
+  let previousTime = null;
+  for (const year of [...history].sort((a, b) => a.race.year - b.race.year)) {
+    const matches = year.riders.includes(rider)
+      ? [rider]
+      : year.riders.filter((other) => other.name.trim().toLowerCase() === name);
+    if (matches.length > 1) {
+      ambiguousYears.push(year.race.year);
+      continue;
+    }
+    if (!matches.length) continue;
+    const match = matches[0];
+    const timed = match.finished && Number.isFinite(match.net) && match.net > 0;
+    const fieldSize = year.finishers.length;
+    const slower = timed ? year.finishers.filter((other) => other.net > match.net).length : 0;
+    results.push({
+      year: year.race.year,
+      rider: match,
+      fieldSize,
+      net: timed ? match.net : null,
+      aheadPct: timed && fieldSize > 1 ? slower / (fieldSize - 1) * 100 : null,
+      timeChange: timed && previousTime !== null ? match.net - previousTime : null,
+    });
+    if (timed) previousTime = match.net;
+  }
+  return { results, ambiguousYears };
 }
 
 // Estimated from scheduled wave start + official net time, not observed on-course passes.
@@ -99,20 +174,26 @@ function summarize(key, title, members, rider, officialRank) {
 
 export function groupsFor(rider, finishers, race) {
   const gender = rider.gender === "F" ? "Women" : rider.gender === "M" ? "Men" : rider.gender;
-  return [
+  const groups = [
     summarize("overall", "Overall", finishers, rider, rider.status),
     summarize("gender", gender, finishers.filter((r) => r.gender === rider.gender), rider,
       rider.genderRank),
-    summarize("division", rider.division, finishers.filter((r) => r.division === rider.division),
-      rider, rider.divisionRank),
-    summarize("wave", `Wave ${rider.wave} (${clockTime(rider.start)})`,
-      finishers.filter((r) => r.wave === rider.wave), rider, null),
   ];
+  if (rider.division) {
+    groups.push(summarize("division", rider.division,
+      finishers.filter((r) => r.division === rider.division), rider, rider.divisionRank));
+  }
+  if (rider.wave !== null && rider.wave !== undefined) {
+    groups.push(summarize("wave", `Wave ${rider.wave} (${clockTime(rider.start)})`,
+      finishers.filter((r) => r.wave === rider.wave), rider, null));
+  }
+  return groups;
 }
 
 export function waveStats(finishers, race) {
   const byWave = new Map();
   for (const r of finishers) {
+    if (r.wave === null || r.wave === undefined) continue;
     if (!byWave.has(r.wave)) byWave.set(r.wave, []);
     byWave.get(r.wave).push(r.net);
   }
@@ -129,6 +210,52 @@ export function waveStats(finishers, race) {
       max: Math.max(...times),
     };
   });
+}
+
+export function estimateNextWave(rider, history, waves, race) {
+  if (!rider.finished || !rider.person || !rider.wave || waves.length === 0) return null;
+
+  const historyStart = race.year - 4;
+  const results = [];
+  for (const year of history) {
+    if (year.race.year < historyStart || year.race.year > race.year) continue;
+    const sameName = year.finishers.filter((r) => r.person === rider.person);
+    const matches = year.race.year === race.year
+      ? year.finishers.filter((r) => r.bib === rider.bib)
+      : sameName.length > 1
+        ? sameName.filter((r) =>
+          String(r.city ?? "").trim().toLowerCase() === String(rider.city ?? "").trim().toLowerCase())
+        : sameName;
+    if (matches.length === 1) {
+      results.push({ year: year.race.year, net: matches[0].net });
+    }
+  }
+  if (results.length === 0) return null;
+
+  const best = results.sort((a, b) => a.net - b.net).slice(0, 3);
+  const average = best.reduce((sum, result) => sum + result.net, 0) / best.length;
+  const requirements = race.waveTimeRequirements;
+  const projectedWave = requirements?.length
+    ? requirements.findIndex((requirement, i) =>
+      i === requirements.length - 1 ? average >= requirement : average < requirement) + 1
+      || requirements.length
+    : waves.reduce((closest, wave) =>
+      Math.abs(wave.median - average) < Math.abs(closest.median - average) ? wave : closest,
+    ).wave;
+  const projected = waves.find((wave) => wave.wave === projectedWave);
+  return {
+    wave: projectedWave,
+    currentWave: rider.wave,
+    wavesAhead: rider.wave - projectedWave,
+    average,
+    resultCount: best.length,
+    years: best.map((result) => result.year).sort((a, b) => a - b),
+    requirement: requirements?.[projectedWave - 1] ?? null,
+    requirementType: requirements?.length && projectedWave === requirements.length
+      ? "or slower"
+      : "faster than",
+    waveMedian: projected?.median ?? null,
+  };
 }
 
 // Gaussian KDE with Silverman's robust bandwidth so one very slow result can't flatten the curve.

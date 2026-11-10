@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build:data": "python3 scripts/build_data.py",
+    "download:history": "python3 scripts/download_athlinks.py",
     "test": "node --test",
     "serve": "python3 -m http.server 8000"
   }

@@ -1,0 +1,12 @@
+{
+  "year": 2025,
+  "date": "2025-11-08",
+  "resultsUrl": "https://www.registericeman.com/Race/Results/86232#resultSetId-605206;perpage:100",
+  "firstStart": "08:45:00",
+  "waveSeconds": 180,
+  "podiumDepth": 5,
+  "resultsFormat": "registericeman",
+  "sources": {
+    "results": "raw/overall-results.json"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "year": 2012,
+  "date": "2012-11-03",
+  "resultsUrl": "https://www.athlinks.com/event/35208/results/Event/235897/Course/330212/Results?page=1",
+  "resultsFormat": "athlinks",
+  "sourceName": "Athlinks results",
+  "eventId": 235897,
+  "courseIds": [
+    330212
+  ],
+  "divisionFromCourse": false,
+  "firstStart": null,
+  "waveSeconds": null,
+  "podiumDepth": 5,
+  "sources": {
+    "results": "raw/athlinks-results.json"
+  }
+}
