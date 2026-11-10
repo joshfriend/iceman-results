@@ -411,7 +411,8 @@ def write_year(event, courses):
         "sources": {"results": "raw/athlinks-results.json"},
     }
     if existing_config:
-        for key in ("additionalResults", "riderMetadata", "wavePlacements", "waveAssignments"):
+        for key in ("additionalResults", "riderMetadata", "wavePlacements", "waveAssignments",
+                    "waveSchedule"):
             if key in existing_config:
                 config[key] = existing_config[key]
     if existing_config and existing_config.get("resultsFormat") != "athlinks":

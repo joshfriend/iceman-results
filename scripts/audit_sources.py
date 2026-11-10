@@ -62,6 +62,7 @@ def audit_year(folder):
         "courses": courses,
         "metadataSources": config.get("riderMetadata", []),
         "wavePlacements": config.get("wavePlacements"),
+        "waveSchedule": config.get("waveSchedule"),
         "metadataCoverage": results["race"].get("metadataCoverage", []),
     }
 

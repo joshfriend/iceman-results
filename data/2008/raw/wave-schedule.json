@@ -1,0 +1,73 @@
+{
+  "notes": [
+    "Category assignments matched to published RunMichigan division labels, not Athlinks age-only brackets.",
+    "The source leaves start times for waves 1-6 blank; their waves are recoverable but starts remain unknown.",
+    "SPORT/EXP abbreviates the schedule's Sport/Expert; SINGLESPEED MEN is the schedule's Men Single Speeds.",
+    "Pro men and women share wave 30 but have distinct published starts."
+  ],
+  "starts": {
+    "iceman": {
+      "7": "09:30:00", "8": "09:35:00", "9": "09:40:00", "10": "09:45:00",
+      "11": "09:50:00", "12": "09:55:00", "13": "10:00:00", "14": "10:05:00",
+      "15": "10:10:00", "16": "10:15:00", "17": "10:20:00", "18": "10:25:00",
+      "19": "10:30:00", "20": "10:35:00", "21": "10:40:00", "22": "10:45:00",
+      "23": "10:50:00", "24": "10:55:00", "25": "11:00:00", "26": "11:05:00",
+      "27": "11:10:00", "28": "11:15:00", "29": "11:20:00"
+    }
+  },
+  "divisionWaves": {
+    "EXPERT MEN 15-18": 1,
+    "EXPERT MEN 19-24": 1,
+    "EXPERT MEN 25-29": 1,
+    "EXPERT MEN 30-34": 1,
+    "EXPERT MEN 35-39": 2,
+    "EXPERT MEN 40-44": 3,
+    "EXPERT MEN 45-49": 4,
+    "EXPERT MEN 50-54": 5,
+    "SPORT/EXP CLYDESDALES": 6,
+    "SINGLESPEED MEN 39 & UNDER": 7,
+    "SINGLESPEED MEN 40+": 8,
+    "SINGLESPEED WOMEN": 8,
+    "SPORT/EXP TANDEMS": 8,
+    "ALL MEN 55-59": 9,
+    "ALL MEN 60-64": 10,
+    "ALL MEN 65+": 10,
+    "EXPERT WOMEN 35-44": 11,
+    "SPORT/EXP WOMEN 45-54": 11,
+    "SPORT MEN 15-18": 12,
+    "SPORT MEN 19-24": 12,
+    "SPORT MEN 25-29": 13,
+    "SPORT MEN 30-33": 14,
+    "SPORT MEN 34-36": 15,
+    "SPORT MEN 37-39": 16,
+    "SPORT MEN 40-43": 17,
+    "SPORT MEN 44-46": 18,
+    "SPORT MEN 47-49": 19,
+    "SPORT MEN 50-54": 20,
+    "SPORT WOMEN 19-34": 21,
+    "SPORT WOMEN 35-44": 21,
+    "ALL WOMEN 55-64": 21,
+    "ALL WOMEN 65+": 21,
+    "BEGINNER TANDEMS": 22,
+    "BEGINNER MEN 15-18": 23,
+    "BEGINNER MEN 19-24": 23,
+    "BEGINNER MEN 25-29": 23,
+    "BEGINNER MEN 30-34": 24,
+    "BEGINNER MEN 35-39": 25,
+    "BEGINNER MEN 40-44": 26,
+    "BEGINNER MEN 45-54": 27,
+    "BEGINNER CLYDESDALES": 28,
+    "ALL MEN 12-14": 29,
+    "ALL WOMEN 12-18": 29,
+    "LADY CLYDESDALES": 29,
+    "BEGINNER WOMEN 19-34": 29,
+    "BEGINNER WOMEN 35-44": 29,
+    "BEGINNER WOMEN 45-54": 29
+  },
+  "waveAssignments": {
+    "pro": {
+      "M": {"wave": 30, "start": "14:30:00"},
+      "F": {"wave": 30, "start": "14:30:30"}
+    }
+  }
+}

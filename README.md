@@ -13,6 +13,7 @@
 | `data/<year>/results.json` | **Generated.** Compact rider table the page loads |
 | `scripts/build_data.py` | Builds every `data/<year>/results.json` and `data/index.json` |
 | `data/<year>/raw/wave-placements.json` | Historical wave placement source data, when available |
+| `data/<year>/raw/wave-schedule.json` | Transcribed organizer schedules with Wayback snapshot provenance in `race.json` |
 | `scripts/download_wave_placements.py` | Downloads 2021–2024 historical wave placements and stores them as JSON |
 | `scripts/download_splits.py` | Archives bulk checkpoint reports without fetching individual certificates |
 | `data/splits.json` | Offline split-source inventory by year; empty sources mean no intermediate splits were exposed by the archived providers |
@@ -72,6 +73,23 @@ Required CSV headers are `bib,name,gender,net` (`net` is `HH:MM:SS`, blank for n
 Every CSV row must match exactly one existing result. A wave without a start can use that year's
 published amateur start schedule; absent schedules leave start times unknown. Keep private
 registration fields out of archived exports.
+
+### Archived wave schedules
+
+Wayback schedules are incorporated for 2008, 2010, 2014, 2016, 2018, and 2019.
+Each year's `waveSchedule` records the snapshot URL and normalized JSON path.
+Its `starts` maps event IDs to wave/start tables, `divisionWaves` matches exact
+published division labels, and `waveAssignments` supplies group/gender starts.
+Provenance is retained in generated `race.dataSources.waveSchedule`.
+
+The 2008 schedule matches recovered RunMichigan skill categories; waves 1-6 lack
+published start times. The 2010 schedule mixes seeded and age-based waves, so age
+alone cannot establish assignment. Other recovered assignments are pro-only.
+Pro men and women share a wave in 2008/2010 but start 30 seconds apart.
+Missing gender can use an exact published pro division without changing gender.
+Junior age categories do not establish MYC entry; event schedules stay separate.
+Published irregularities (2014 waves 18/19 and 2010 wave 35) are retained.
+Early-season 2015/2017 captures are not treated as verified race-day schedules.
 
 ## Develop
 

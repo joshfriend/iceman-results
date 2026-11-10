@@ -661,6 +661,13 @@ def build_year(folder):
     config = json.loads((folder / "race.json").read_text())
     first_start = seconds(config["firstStart"]) if config.get("firstStart") else None
     wave_seconds = config["waveSeconds"]
+    wave_schedule = config.get("waveSchedule")
+    schedule = json.loads((folder / wave_schedule["path"]).read_text()) if wave_schedule else {}
+    scheduled_starts = {
+        event: {int(wave): seconds(start) for wave, start in waves.items()}
+        for event, waves in schedule.get("starts", {}).items()
+    }
+    wave_assignments = config.get("waveAssignments", schedule.get("waveAssignments", {}))
     if config.get("resultsFormat") == "registericeman":
         parsed_results = parse_registericeman(
             folder / config["sources"]["results"], first_start, wave_seconds,
@@ -749,14 +756,21 @@ def build_year(folder):
                 None if r["raceGroup"] == "unclassified"
                 else "division" if r["division"] else "resultSet"
             )
+        group_assignments = (
+            wave_assignments.get(r["raceGroup"])
+            if r["raceEvent"] == config.get("raceEvent", "iceman") else None
+        )
+        division_wave = (
+            schedule.get("divisionWaves", {}).get(r["division"])
+            if r["raceEvent"] == config.get("raceEvent", "iceman") else None
+        )
+        assignment = group_assignments.get(r["gender"]) if group_assignments else None
+        if group_assignments and not assignment and division_wave is None:
+            raise ValueError(
+                f"{folder}: no configured wave for {r['raceGroup']} gender {r['gender']!r}"
+            )
         if config.get("resultsFormat") not in {"registericeman", "athlinks"}:
             start, wave = starts.get(str(r["bib"]), (None, None))
-            group_assignments = config.get("waveAssignments", {}).get(r["raceGroup"])
-            assignment = group_assignments.get(r["gender"]) if group_assignments else None
-            if group_assignments and not assignment:
-                raise ValueError(
-                    f"{folder}: no configured wave for {r['raceGroup']} gender {r['gender']!r}"
-                )
             if assignment:
                 start, wave = seconds(assignment["start"]), assignment["wave"]
                 start_source = wave_source = "waveSchedule"
@@ -776,6 +790,24 @@ def build_year(folder):
                 wave=wave if wave is not None else r.get("wave"),
                 startSource=start_source, waveSource=wave_source,
             )
+        elif assignment:
+            for key, value in (("wave", assignment["wave"]), ("start", seconds(assignment["start"]))):
+                if r.get(key) not in {None, value}:
+                    raise ValueError(f"{folder}: conflicting scheduled {key} for bib {r['bib']}")
+                if r.get(key) is None:
+                    r[key] = value
+                    r[f"{key}Source"] = "waveSchedule"
+        if division_wave is not None:
+            if r.get("wave") not in {None, division_wave}:
+                raise ValueError(f"{folder}: conflicting division wave for bib {r['bib']}")
+            if r.get("wave") is None:
+                r["wave"], r["waveSource"] = division_wave, "waveSchedule"
+        scheduled_start = scheduled_starts.get(r["raceEvent"], {}).get(r.get("wave"))
+        if scheduled_start is not None:
+            if r.get("start") not in {None, scheduled_start}:
+                raise ValueError(f"{folder}: conflicting scheduled start for bib {r['bib']}")
+            if r.get("start") is None:
+                r["start"], r["startSource"] = scheduled_start, "waveSchedule"
         if r.get("start") is None and r.get("wave") is not None and first_start is not None:
             if wave_seconds is None or r["raceGroup"] != "amateur":
                 raise ValueError(f"{folder}: wave for bib {r['bib']} requires an explicit start time")
@@ -808,6 +840,7 @@ def build_year(folder):
             "additionalResults": config.get("additionalResults", []),
             "riderMetadata": config.get("riderMetadata", []),
             **({"wavePlacements": wave_placements} if wave_placements else {}),
+            **({"waveSchedule": wave_schedule} if wave_schedule else {}),
         },
         "metadataCoverage": metadata_coverage,
     }

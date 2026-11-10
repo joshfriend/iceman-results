@@ -12,6 +12,10 @@
   "firstStart": null,
   "waveSeconds": null,
   "podiumDepth": 5,
+  "waveSchedule": {
+    "path": "raw/wave-schedule.json",
+    "sourceUrl": "https://web.archive.org/web/20141109053046/http://www.iceman.com/pages/wave-start-times"
+  },
   "sources": {
     "results": "raw/athlinks-results.json",
     "divisions": "raw/athlinks-divisions.json"

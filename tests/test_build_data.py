@@ -411,7 +411,10 @@ class MetadataTests(unittest.TestCase):
                 }])
                 self.assertTrue(all(rider["raceGroupSource"] == "metadata:0"
                                     for rider in riders if rider["raceGroup"] == "pro"))
-                self.assertTrue(all(rider["wave"] is None for rider in riders))
+                self.assertTrue(all(rider["wave"] is None for rider in riders
+                                    if rider["raceGroup"] == "unclassified"))
+                self.assertTrue(all(rider["waveSource"] == "waveSchedule" for rider in riders
+                                    if rider["wave"] is not None))
 
     def test_event_identity_is_separate_from_junior_age_categories(self):
         for year in (2003, 2025, 2026):
@@ -432,9 +435,11 @@ class MetadataTests(unittest.TestCase):
         metadata = [{"format": "csv", "path": "raw/metadata.csv"}]
         wave_placements = {"path": "raw/waves.csv", "sourceUrl": "https://example.com/waves.csv"}
         wave_assignments = {"pro": {"M": {"wave": 55, "start": "14:30:00"}}}
+        wave_schedule = {"path": "raw/wave-schedule.json", "sourceUrl": "https://example.com/archive"}
         (folder / "race.json").write_text(json.dumps({
             "resultsFormat": "athlinks", "riderMetadata": metadata, "additionalResults": extras,
             "wavePlacements": wave_placements, "waveAssignments": wave_assignments,
+            "waveSchedule": wave_schedule,
         }))
         group = {
             "eventCourseId": 20, "totalAthletes": 1,
@@ -451,6 +456,7 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(config["additionalResults"], extras)
         self.assertEqual(config["wavePlacements"], wave_placements)
         self.assertEqual(config["waveAssignments"], wave_assignments)
+        self.assertEqual(config["waveSchedule"], wave_schedule)
 
     def test_csv_wave_derives_start_only_with_published_schedule(self):
         (self.folder / "raw").mkdir()
@@ -492,6 +498,117 @@ class MetadataTests(unittest.TestCase):
 
 
 class WaveScheduleTests(unittest.TestCase):
+    def build_archived_schedule(self, riders, schedule):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            (folder / "raw").mkdir()
+            source = {"path": "raw/wave-schedule.json", "sourceUrl": "https://example.com/archive"}
+            (folder / source["path"]).write_text(json.dumps(schedule))
+            (folder / "race.json").write_text(json.dumps({
+                "year": 2014, "date": "2014-11-01", "resultsUrl": "https://example.com",
+                "resultsFormat": "athlinks", "firstStart": None, "waveSeconds": None,
+                "podiumDepth": 5, "sources": {"results": "raw/results.json"},
+                "waveSchedule": source,
+            }))
+            template = {
+                "bib": 1, "person": "rider-one", "name": "Rider One", "city": "",
+                "status": 1, "net": 3600, "gender": "M", "genderRank": 1,
+                "division": "Men 40", "divisionRank": 1, "wave": None, "start": None,
+                "raceGroup": "amateur",
+            }
+            main_riders = [{**template, **rider} for rider in riders if not rider.get("slush")]
+            slush_riders = [{**template, **rider} for rider in riders if rider.get("slush")]
+            if slush_riders:
+                config = json.loads((folder / "race.json").read_text())
+                config["additionalResults"] = [{
+                    "format": "athlinks", "results": "raw/slush.json", "raceEvent": "slush-cup",
+                }]
+                (folder / "race.json").write_text(json.dumps(config))
+            with patch("scripts.build_data.ROOT", folder), patch(
+                "scripts.build_data.parse_athlinks", side_effect=[main_riders, slush_riders],
+            ):
+                build_year(folder)
+            return json.loads((folder / "results.json").read_text())
+
+    def test_archived_schedule_preserves_irregular_times_and_event_boundaries(self):
+        schedule = json.loads(Path("data/2014/raw/wave-schedule.json").read_text())
+        schedule["starts"]["slush-cup"]["18"] = "10:00:00"
+        result = self.build_archived_schedule([
+            {"wave": 18},
+            {"wave": 19},
+            {},
+            {"raceGroup": "junior", "division": "Men 17-18"},
+            {"wave": 18, "slush": True},
+            {"raceGroup": "pro", "slush": True},
+            {"raceGroup": "pro"},
+            {"raceGroup": "pro", "gender": "F"},
+        ], schedule)
+        riders = [dict(zip(FIELDS, row)) for row in result["riders"]]
+        self.assertEqual([rider["start"] for rider in riders],
+                         [35520, 35700, None, None, 52200, 52380, 36000, None])
+        self.assertEqual([rider["wave"] for rider in riders],
+                         [18, 19, None, None, 55, 56, 18, None])
+        self.assertEqual(riders[0]["waveSource"], "results")
+        self.assertEqual(riders[0]["startSource"], "waveSchedule")
+        self.assertEqual(riders[4]["waveSource"], "waveSchedule")
+        self.assertEqual(result["race"]["dataSources"]["waveSchedule"]["path"],
+                         "raw/wave-schedule.json")
+
+    def test_exact_division_recovers_wave_without_changing_missing_gender(self):
+        schedule = json.loads(Path("data/2018/raw/wave-schedule.json").read_text())
+        result = self.build_archived_schedule([{
+            "gender": "NOT SPECIFIED", "division": "Pro Cat 1 Women", "raceGroup": "pro",
+        }], schedule)
+        rider = dict(zip(FIELDS, result["riders"][0]))
+        self.assertEqual((rider["wave"], rider["start"]), (56, 52380))
+        self.assertEqual(rider["gender"], "NOT SPECIFIED")
+        self.assertEqual((rider["waveSource"], rider["startSource"]),
+                         ("waveSchedule", "waveSchedule"))
+
+    def test_category_wave_without_published_start_remains_untimed(self):
+        schedule = json.loads(Path("data/2008/raw/wave-schedule.json").read_text())
+        result = self.build_archived_schedule([{"division": "EXPERT MEN 35-39"}], schedule)
+        rider = dict(zip(FIELDS, result["riders"][0]))
+        self.assertEqual(rider["wave"], 2)
+        self.assertEqual(rider["waveSource"], "waveSchedule")
+        self.assertIsNone(rider["start"])
+        self.assertIsNone(rider["startSource"])
+
+    def test_shared_pro_wave_retains_gender_specific_starts(self):
+        schedule = json.loads(Path("data/2010/raw/wave-schedule.json").read_text())
+        result = self.build_archived_schedule([
+            {"raceGroup": "pro"}, {"raceGroup": "pro", "gender": "F"},
+        ], schedule)
+        riders = [dict(zip(FIELDS, row)) for row in result["riders"]]
+        self.assertEqual([(rider["wave"], rider["start"]) for rider in riders],
+                         [(48, 52200), (48, 52230)])
+
+    def test_archived_schedule_rejects_conflicting_published_assignments(self):
+        schedule = json.loads(Path("data/2014/raw/wave-schedule.json").read_text())
+        for rider in ({"raceGroup": "pro", "wave": 2}, {"wave": 18, "start": 35460}):
+            with self.subTest(rider=rider), self.assertRaisesRegex(ValueError, "conflicting scheduled"):
+                self.build_archived_schedule([rider], schedule)
+
+    def test_real_archives_do_not_assign_age_only_or_seeded_categories(self):
+        for year, pros, waves, starts in (
+            (2008, 58, 1936, 1402), (2010, 89, 89, 89), (2014, 120, 120, 120),
+            (2016, 100, 100, 100), (2018, 94, 94, 94), (2019, 122, 122, 122),
+        ):
+            with self.subTest(year=year):
+                result = json.loads(Path(f"data/{year}/results.json").read_text())
+                riders = [dict(zip(FIELDS, row)) for row in result["riders"]]
+                pro = [rider for rider in riders if rider["raceGroup"] == "pro"]
+                self.assertEqual(len(pro), pros)
+                self.assertEqual(sum(rider["wave"] is not None for rider in riders), waves)
+                self.assertEqual(sum(rider["start"] is not None for rider in riders), starts)
+                self.assertTrue(all(rider["wave"] is not None and rider["start"] is not None
+                                    for rider in pro))
+                self.assertTrue(all(rider["waveSource"] == rider["startSource"] == "waveSchedule"
+                                    for rider in pro))
+                self.assertTrue(all(rider["wave"] is None and rider["start"] is None
+                                    for rider in riders if rider["raceGroup"] == "unclassified"
+                                    or year != 2008 and rider["raceGroup"] != "pro"))
+
     def test_configured_pro_schedule_corrects_anomalous_start_list_wave(self):
         with tempfile.TemporaryDirectory() as temp:
             folder = Path(temp)
