@@ -99,17 +99,19 @@ export function winnerGaps(rider, finishers) {
   });
 }
 
-function ageRange(rider) {
-  if (Number.isInteger(rider.age) && rider.age > 0 && rider.age <= 120) {
-    return [rider.age, rider.age];
-  }
+function ageRange(rider, preferDivisionRange = false) {
   const division = String(rider.division ?? "").trim();
   const compact = /^[MF](\d{2})(\d{2,3})$/i.exec(division);
   const range = compact ?? /\b(\d{1,3})\s*-\s*(\d{1,3})\b/.exec(division);
-  if (range) {
-    const min = Number(range[1]), max = Number(range[2]);
-    return min > 0 && min <= max && max <= 120 ? [min, max] : null;
+  const divisionBounds = range && [Number(range[1]), Number(range[2])];
+  const divisionRange = divisionBounds && divisionBounds[0] > 0
+    && divisionBounds[0] <= divisionBounds[1] && divisionBounds[1] <= 120
+    ? divisionBounds : null;
+  if (preferDivisionRange && divisionRange) return divisionRange;
+  if (Number.isInteger(rider.age) && rider.age > 0 && rider.age <= 120) {
+    return [rider.age, rider.age];
   }
+  if (divisionRange) return divisionRange;
   const under = /\bU(\d{1,3})\b/i.exec(division);
   if (under) return Number(under[1]) > 1 ? [1, Number(under[1]) - 1] : null;
   const upTo = /\b(\d{1,3})\s*(?:-\s*|&\s*)?under\b/i.exec(division);
@@ -125,7 +127,16 @@ function agesCompatible(rider, other, year = rider.raceYear, otherYear = other.r
   const age = ageRange(rider), otherAge = ageRange(other);
   if (!age || !otherAge) return true;
   const elapsed = otherYear - year;
-  return otherAge[1] - age[0] >= elapsed - 1 && otherAge[0] - age[1] <= elapsed + 1;
+  const compatible = (range, otherRange) =>
+    otherRange[1] - range[0] >= elapsed - 1 && otherRange[0] - range[1] <= elapsed + 1;
+  if (compatible(age, otherAge)) return true;
+  // A verified Athlinks identity keeps age conflicts strict; otherwise use the division range.
+  if (Number.isInteger(rider.athlinksRacerId) && rider.athlinksRacerId > 0
+    && rider.athlinksRacerId === other.athlinksRacerId) return false;
+  const riderDivisionRange = ageRange(rider, true);
+  const otherDivisionRange = ageRange(other, true);
+  return Boolean(riderDivisionRange && otherDivisionRange
+    && compatible(riderDivisionRange, otherDivisionRange));
 }
 
 function identityMatches(rider, candidates, nameMatches,

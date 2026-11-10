@@ -217,7 +217,7 @@ test("Jonathan Winters' age-inconsistent 2016 result is excluded without a warni
   const old = history.find((year) => year.race.year === 2016);
   assert.equal(old.riders.find((r) => r.name === selected.name).division, "M 39-39");
   const { results, ambiguousYears } = riderHistory(selected, history);
-  assert.deepEqual(results.map((r) => r.year), [2022, 2023, 2024, 2025, 2026]);
+  assert.deepEqual(results.map((r) => r.year), [2008, 2022, 2023, 2024, 2025, 2026]);
   assert.deepEqual(ambiguousYears, []);
   assert.deepEqual(findYearRiders(current.riders, String(selected.bib), old.riders), []);
 });
