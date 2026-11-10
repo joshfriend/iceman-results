@@ -431,6 +431,9 @@ async function renderHistory(rider) {
         yearCell.append(" ", mark);
       }
       row.append(yearCell);
+      const waveCell = document.createElement("td");
+      waveCell.textContent = result.rider.wave ? `Wave ${result.rider.wave}` : "—";
+      row.append(waveCell);
       const change = result.timeChange;
       for (const value of [
         result.net === null ? String(result.rider.status) : hms(result.net),
