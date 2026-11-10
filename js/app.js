@@ -1,10 +1,10 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
 import {
-  clockTime, comparisonField, comparisonRank, duration, estimateNextWave, findRiders, findYearRiders,
-  groupsFor, hm, hms, kde, ordinal, parseRace, passCounts, podium, riderHistory, waveStats, winnerGaps,
-  raceRecap, selectRaceEvent,
-} from "./stats.js";
+  clockTime, comparisonRank, duration, estimateNextWave, findRiders, findYearRiders,
+  groupsFor, hm, hms, kde, ordinal, parseRace, passCounts, podium, riderHistory, waveDistributions,
+  winnerGaps, raceRecap, selectRaceEvent,
+} from "./stats.js?v=3";
 
 const AWARDS = {
   1: { name: "Gold", color: "#c9a227" },
@@ -79,17 +79,19 @@ $("race-title").textContent = raceTitle;
 document.title = `${raceTitle} results`;
 renderRaceRecap(data);
 drawEntriesHistory();
-const hasWaveData = data.finishers.some((r) => r.start !== null && r.wave !== null);
+const hasWaveData = data.finishers.some((r) => Number.isInteger(r.wave));
+const hasStartData = data.finishers.some((r) => Number.isFinite(r.start) && Number.isInteger(r.wave));
 let waves = [];
 let waveResizeObserver;
 const overallMinutes = data.finishers.map((r) => r.net / 60).sort((a, b) => a - b);
 $("source").href = data.race.resultsUrl;
 $("source").textContent = data.race.sourceName;
-$("source-note").textContent = hasWaveData
+$("source-note").textContent = hasStartData
   ? " with start-wave information."
-  : " (start-wave data unavailable for this year).";
-$("passes").hidden = !hasWaveData;
-$("pass-note").hidden = !hasWaveData;
+  : hasWaveData ? " with wave assignments; scheduled start times unavailable."
+    : " (start-wave data unavailable for this year).";
+$("passes").hidden = !hasStartData;
+$("pass-note").hidden = !hasStartData;
 $("wave-results").hidden = !hasWaveData;
 
 $("event").addEventListener("change", () => {
@@ -310,13 +312,12 @@ function show(rider) {
     chip("Division", rider.division || "None listed"),
     chip("Field", rider.raceGroup),
   );
-  const field = comparisonField(rider, data.finishers);
-  waves = waveStats(field, data.race);
+  waves = waveDistributions(rider, data.finishers, data.race);
   const hasRiderWave = Number.isFinite(rider.start) && Number.isFinite(rider.clock)
     && Number.isInteger(rider.wave);
   $("passes").hidden = !hasRiderWave;
   $("pass-note").hidden = !hasRiderWave;
-  $("wave-results").hidden = !hasRiderWave;
+  $("wave-results").hidden = !rider.finished || waves.length === 0;
   $("report").hidden = false;
   $("details").hidden = !rider.finished;
   document.title = `${rider.name} — ${raceTitle}`;
@@ -343,6 +344,7 @@ function show(rider) {
       podiumFact(rider),
     ]);
     drawCurves(rider);
+    if (waves.length) drawWaves(rider);
     return;
   }
   renderWaveEstimate(rider);
@@ -363,7 +365,8 @@ function show(rider) {
 }
 
 function renderWaveEstimate(rider) {
-  const estimate = estimateNextWave(rider, raceHistory, waves, data.race);
+  const estimate = estimateNextWave(rider, raceHistory,
+    waves.filter((wave) => wave.kind !== "pro"), data.race);
   $("wave-estimate").hidden = !estimate;
   if (!estimate) return;
 
@@ -679,7 +682,7 @@ function drawWaves(rider) {
   waveResizeObserver?.disconnect();
   const rowH = 22;
   const width = 1000;
-  const margin = { top: 34, right: 170, bottom: 48, left: 112 };
+  const margin = { top: 34, right: 170, bottom: 48, left: 124 };
   const height = rowH * waves.length;
   const bounds = waves.flatMap((w) => [w.min, w.max]).map((s) => s / 60);
   const x = d3.scaleLinear(
@@ -696,7 +699,7 @@ function drawWaves(rider) {
   const svg = d3.select($("wave-rows-content")).html("").append("svg")
     .attr("viewBox", `0 0 ${width} ${height}`)
     .attr("role", "img")
-    .attr("aria-label", "Finish time distribution for every start wave");
+    .attr("aria-label", "Finish time distributions by wave, with pro men and pro women for comparison");
 
   svg.append("g").selectAll("line").data(d3.range(x.domain()[0], x.domain()[1] + 1, 30)).join("line")
     .attr("class", "gridline")
@@ -709,12 +712,21 @@ function drawWaves(rider) {
   header.append("text").attr("x", width - margin.right + 96).attr("y", 18).text("MEDIAN");
 
   waves.forEach((w, i) => {
-    const mineRow = w.wave === rider.wave;
+    const mineRow = w.kind === "pro"
+      ? rider.raceGroup === "pro" && rider.gender === w.gender
+      : rider.raceGroup !== "pro" && w.wave === rider.wave;
     const color = mineRow ? COLORS.accent : COLORS.blue;
     const cy = rowY(i);
     const row = svg.append("g").attr("class", mineRow ? "wave-highlight" : null);
+    const rowName = w.label ?? `Wave ${w.wave}`;
+    const startLabel = Number.isFinite(w.start) ? `${clockTime(w.start)} start` : null;
     row.append("title").text(
-      `Wave ${w.wave} · ${clockTime(w.start)} start · ${fmt(w.n)} finishers · median ${hms(w.median)}`,
+      [
+        `${rowName}${w.kind === "pro" && w.wave !== null ? ` (wave ${w.wave})` : ""}`,
+        startLabel,
+        `${fmt(w.n)} finishers`,
+        `median ${hms(w.median)}`,
+      ].filter(Boolean).join(" · "),
     );
     if (mineRow || i % 2 === 0) {
       row.append("rect").attr("x", 0).attr("width", width).attr("y", cy - rowH / 2 + 0.5).attr("height", rowH - 1)
@@ -736,7 +748,7 @@ function drawWaves(rider) {
       .attr("stroke", (t) => isOutlier(t) ? color : "none")
       .attr("stroke-width", 0.7)
       .attr("opacity", 0.3)
-      .append("title").text((t) => `Wave ${w.wave} · ${hms(t)}${isOutlier(t)
+      .append("title").text((t) => `${rowName} · ${hms(t)}${isOutlier(t)
         ? " · Outlier: outside this wave's 1.5×IQR fences" : ""}`);
     row.append("rect")
       .attr("x", x(w.q1 / 60)).attr("width", x(w.q3 / 60) - x(w.q1 / 60))
@@ -751,8 +763,11 @@ function drawWaves(rider) {
     const label = row.append("g").attr("font-size", 12).attr("dominant-baseline", "middle")
       .attr("font-weight", weight);
     label.append("text").attr("x", 8).attr("y", cy).attr("fill", labelColor)
-      .text(String(w.wave).padStart(2, "0"));
-    label.append("text").attr("x", 44).attr("y", cy).attr("fill", labelColor).text(clockTime(w.start));
+      .text(w.label ?? String(w.wave).padStart(2, "0"));
+    if (Number.isFinite(w.start)) {
+      label.append("text").attr("x", w.label ? 78 : 44).attr("y", cy).attr("fill", labelColor)
+        .text(clockTime(w.start));
+    }
     label.append("text").attr("x", width - margin.right + 18).attr("y", cy)
       .attr("fill", mineRow ? COLORS.accent : COLORS.muted).text(fmt(w.n));
     label.append("text").attr("x", width - margin.right + 96).attr("y", cy).attr("fill", COLORS.ink)
@@ -763,9 +778,13 @@ function drawWaves(rider) {
   svg.append("line").attr("x1", mine).attr("x2", mine)
     .attr("y1", 0).attr("y2", height)
     .attr("stroke", COLORS.red).attr("stroke-width", 1.4).attr("stroke-dasharray", "6 4");
-  const myRow = waves.findIndex((w) => w.wave === rider.wave);
-  svg.append("circle").attr("cx", mine).attr("cy", rowY(myRow)).attr("r", 5)
-    .attr("fill", COLORS.red).attr("stroke", "#fff").attr("stroke-width", 1.2);
+  const myRow = waves.findIndex((w) => w.kind === "pro"
+    ? rider.raceGroup === "pro" && rider.gender === w.gender
+    : rider.raceGroup !== "pro" && w.wave === rider.wave);
+  if (myRow >= 0) {
+    svg.append("circle").attr("cx", mine).attr("cy", rowY(myRow)).attr("r", 5)
+      .attr("fill", COLORS.red).attr("stroke", "#fff").attr("stroke-width", 1.2);
+  }
   headerSvg.append("text").attr("x", mine + 6).attr("y", margin.top - 8)
     .attr("fill", COLORS.red).attr("font-size", 11).attr("font-weight", 700).text(`YOU ${hms(rider.net)}`);
 

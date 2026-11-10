@@ -4,7 +4,8 @@ import { test } from "node:test";
 
 import {
   comparisonField, comparisonRank, estimateNextWave, findRiders, findYearRiders, groupsFor, kde, parseRace,
-  passCounts, raceRecap, riderHistory, selectRaceEvent, waveStats, winnerGaps,
+  passCounts, proWaveStats, raceRecap, riderHistory, selectRaceEvent, waveDistributions, waveStats,
+  winnerGaps,
 } from "../js/stats.js";
 
 const readJson = (path) => JSON.parse(readFileSync(new URL(`../data/${path}`, import.meta.url)));
@@ -509,7 +510,9 @@ test("loads the oldest and newest Athlinks datasets without inventing bibs or wa
   assert.ok(riders2001.some((r) => r.bib === null));
   assert.equal(riders2024.length, 4248);
   assert.equal(finishers2024.length, 4179);
-  assert.ok(riders2024.every((r) => r.start === null && r.wave === null));
+  assert.ok(riders2024.every((r) => r.start === null));
+  assert.ok(riders2024.some((r) => r.wave !== null));
+  assert.ok(riders2024.filter((r) => r.wave !== null).every((r) => r.waveSource === "bsnyd"));
 });
 
 test("pass counts match the start-list analysis", () => {
@@ -548,6 +551,24 @@ test("amateur wave stats cover 45 waves, with junior/pro starts separate", () =>
   assert.equal(w29.median, 9940.5);
 });
 
+test("pro comparison distributions merge by gender and precede the selected wave rows", () => {
+  const pro = proWaveStats(finishers);
+  assert.deepEqual(pro.map(({ label, wave, start, n }) => [label, wave, start, n]), [
+    ["Pro men", 55, 52200, 91],
+    ["Pro women", 56, 52800, 29],
+  ]);
+  const waves = [...pro, ...waveStats(comparisonField(josh, finishers), race)];
+  assert.deepEqual(waves.slice(0, 2).map((w) => w.label), ["Pro men", "Pro women"]);
+  const adam = riders.find((r) => r.person === "adam-govan");
+  assert.equal(pro.find((w) => adam.gender === w.gender).n, 91);
+  const adamWaves = waveDistributions(adam, finishers, race);
+  assert.deepEqual(adamWaves.slice(0, 2).map((w) => w.label), ["Pro men", "Pro women"]);
+  assert.equal(adamWaves.length, 47);
+  assert.ok(adamWaves.some((w) => w.wave === 1 && w.n > 0));
+  assert.ok(adamWaves.some((w) => w.wave === 29 && w.n === 76));
+  assert.ok(!adamWaves.some((w) => w.wave === 55 && !w.label));
+});
+
 test("wave boxes use interpolated quartiles and observed whiskers, keeping outliers", () => {
   const times = [1000, 17, 12, 16, 10, 1, 15, 13, 14, 11, 18];
   const members = times.map((net) => ({ net, wave: 3, start: 100 }));
@@ -564,6 +585,36 @@ test("wave boxes use interpolated quartiles and observed whiskers, keeping outli
   assert.equal(wave.n, times.length);
   assert.deepEqual(wave.times, times);
   assert.deepEqual(members.map((r) => r.net), times);
+});
+
+test("historical wave distributions do not require scheduled start times", () => {
+  for (const year of [2021, 2022, 2023, 2024, 2025]) {
+    const data = parseIceman(`${year}/results.json`);
+    const rider = year === 2022
+      ? data.riders.find((r) => r.person === "adam-govan")
+      : data.finishers.find((r) => r.raceGroup === "amateur");
+    const waves = waveDistributions(rider, data.finishers, data.race);
+    assert.deepEqual(waves.slice(0, 2).map((w) => w.label), ["Pro men", "Pro women"]);
+    assert.ok(waves.some((w) => w.kind !== "pro" && w.wave === 1), `${year}: amateur waves`);
+    assert.ok(waves.every((w) => Number.isFinite(w.median)), `${year}: valid distributions`);
+    const pros = data.finishers.filter((r) => r.raceGroup === "pro");
+    assert.equal(waves.slice(0, 2).reduce((sum, w) => sum + w.n, 0), pros.length);
+    if (year === 2022) {
+      assert.equal(rider.start, null);
+      assert.ok(waves.some((w) => w.wave === rider.wave && w.start === null));
+    }
+  }
+});
+
+test("wave stats retain unknown starts without inventing midnight or wave assignments", () => {
+  const members = [
+    { wave: 1, start: null, net: 100 },
+    { wave: 1, start: null, net: 200 },
+    { wave: null, start: null, net: 50 },
+  ];
+  assert.deepEqual(waveStats(members, {}).map(({ wave, start, n, median }) =>
+    ({ wave, start, n, median })), [{ wave: 1, start: null, n: 2, median: 150 }]);
+  assert.equal(waveStats([...members, { wave: 1, start: 1000, net: 300 }], {})[0].start, 1000);
 });
 
 test("wave whiskers include fence boundaries and handle small or identical samples", () => {

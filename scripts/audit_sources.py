@@ -61,6 +61,7 @@ def audit_year(folder):
         "athlinksAssignmentFields": sorted(assignment_fields),
         "courses": courses,
         "metadataSources": config.get("riderMetadata", []),
+        "wavePlacements": config.get("wavePlacements"),
         "metadataCoverage": results["race"].get("metadataCoverage", []),
     }
 

@@ -4,6 +4,18 @@
   "resultsUrl": "https://my.raceresult.com/421674/results",
   "firstStart": "08:45:00",
   "waveSeconds": 180,
+  "waveAssignments": {
+    "pro": {
+      "M": {
+        "wave": 55,
+        "start": "14:30:00"
+      },
+      "F": {
+        "wave": 56,
+        "start": "14:40:00"
+      }
+    }
+  },
   "podiumDepth": 5,
   "waveTimeRequirements": [
     "1:51:38",

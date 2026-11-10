@@ -38,5 +38,9 @@
       "divisions": "raw/slush-cup-divisions.json",
       "resultsUrl": "https://www.athlinks.com/event/35208/results/Event/1093362/Course/2525752/Results?page=1"
     }
-  ]
+  ],
+  "wavePlacements": {
+    "path": "raw/wave-placements.json",
+    "sourceUrl": "https://bsnyd.com/iceman/data/Iceman%20-%202024.csv"
+  }
 }

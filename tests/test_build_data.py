@@ -8,7 +8,8 @@ from unittest.mock import patch
 from scripts.build_data import (
     athlinks_divisions, athlinks_race_group, build_year, FIELDS, parse_athlinks,
     parse_metadata_csv, parse_raceresult, parse_registericeman, parse_runmichigan,
-    parse_start_list, published_age, race_group, supplement_athlinks_ids, supplement_metadata,
+    parse_start_list, parse_wave_placements, published_age, race_group, supplement_athlinks_ids,
+    supplement_metadata, supplement_wave_placements,
 )
 from scripts.download_athlinks import deduplicate_rows, division_group, fetch_division_page, write_year
 from scripts.download_supplemental import raceresult, registericeman
@@ -372,6 +373,7 @@ class MetadataTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid raceGroup"):
             list(parse_metadata_csv(path))
 
+
     def test_published_category_schema_not_presence_of_a_pro_rider(self):
         course = {"courseId": 20, "courseName": "Main"}
         metadata = [{
@@ -428,8 +430,11 @@ class MetadataTests(unittest.TestCase):
         folder.mkdir()
         extras = [{"format": "athlinks", "results": "raw/pro-results.json", "raceGroup": "pro"}]
         metadata = [{"format": "csv", "path": "raw/metadata.csv"}]
+        wave_placements = {"path": "raw/waves.csv", "sourceUrl": "https://example.com/waves.csv"}
+        wave_assignments = {"pro": {"M": {"wave": 55, "start": "14:30:00"}}}
         (folder / "race.json").write_text(json.dumps({
             "resultsFormat": "athlinks", "riderMetadata": metadata, "additionalResults": extras,
+            "wavePlacements": wave_placements, "waveAssignments": wave_assignments,
         }))
         group = {
             "eventCourseId": 20, "totalAthletes": 1,
@@ -444,6 +449,8 @@ class MetadataTests(unittest.TestCase):
         config = json.loads((folder / "race.json").read_text())
         self.assertEqual(config["riderMetadata"], metadata)
         self.assertEqual(config["additionalResults"], extras)
+        self.assertEqual(config["wavePlacements"], wave_placements)
+        self.assertEqual(config["waveAssignments"], wave_assignments)
 
     def test_csv_wave_derives_start_only_with_published_schedule(self):
         (self.folder / "raw").mkdir()
@@ -482,3 +489,137 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(rider["wave"], 2)
         self.assertIsNone(rider["start"])
         self.assertIsNone(rider["startSource"])
+
+
+class WaveScheduleTests(unittest.TestCase):
+    def test_configured_pro_schedule_corrects_anomalous_start_list_wave(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            raw = folder / "raw"
+            raw.mkdir()
+            (raw / "overall.json").write_text(json.dumps({
+                "DataFields": [], "data": [],
+            }))
+            (raw / "pro.json").write_text(json.dumps({
+                "DataFields": ["BIB", "ID", "Status", "Name", "City", "Net", "BIB",
+                               "Gender", "Division"],
+                "data": [
+                    ["101", "1", "1", "Matt Acker", "Town", "1:36:00", "101", "M (1)", ""],
+                    ["204", "2", "2", "Samanth Johnson", "Town", "1:50:00", "204", "F (1)", ""],
+                ],
+            }))
+            (raw / "start-list.txt").write_text(
+                "101 Acker Matt 0 14:30:00 91\n"
+                "204 Johnson Samanth 56 14:40:00 4\n"
+            )
+            (folder / "race.json").write_text(json.dumps({
+                "year": 2026, "date": "2026-11-07", "resultsUrl": "https://example.com",
+                "firstStart": "08:45:00", "waveSeconds": 180, "podiumDepth": 5,
+                "sources": {"results": "raw/overall.json", "startList": "raw/start-list.txt"},
+                "additionalResults": [{
+                    "raceGroup": "pro", "format": "raceresult", "results": "raw/pro.json",
+                }],
+                "waveAssignments": {
+                    "pro": {
+                        "M": {"wave": 55, "start": "14:30:00"},
+                        "F": {"wave": 56, "start": "14:40:00"},
+                    },
+                },
+            }))
+            with patch("scripts.build_data.ROOT", folder):
+                build_year(folder)
+            result = json.loads((folder / "results.json").read_text())
+            riders = {row[1]: dict(zip(FIELDS, row)) for row in result["riders"]}
+            self.assertEqual(
+                (riders["matt-acker"]["wave"], riders["matt-acker"]["start"]),
+                (55, 52200),
+            )
+            self.assertEqual(
+                (riders["samanth-johnson"]["wave"], riders["samanth-johnson"]["start"]),
+                (56, 52800),
+            )
+            self.assertTrue(all(
+                rider["waveSource"] == rider["startSource"] == "waveSchedule"
+                for rider in riders.values()
+            ))
+
+
+class WavePlacementTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path = Path(self.temp.name) / "wave-placements.json"
+
+    def test_parser_accepts_archived_source_column_names(self):
+        self.path.write_text('[{"name":"Rider One","division":"Men 40","wave":2}]')
+        self.assertEqual(list(parse_wave_placements(self.path)), [
+            {"name": "Rider One", "division": "Men 40", "wave": 2},
+        ])
+
+    def test_parser_rejects_invalid_waves(self):
+        self.path.write_text('[{"name":"Rider One","division":"Men 40","wave":0}]')
+        with self.assertRaisesRegex(ValueError, "invalid wave"):
+            list(parse_wave_placements(self.path))
+
+    def test_wave_join_uses_exact_names_and_divisions_to_resolve_duplicates(self):
+        first = {
+            "name": "Rider One", "division": "Men Single Speed 40+", "raceEvent": "iceman",
+            "wave": None,
+        }
+        second = {"name": "Rider One", "division": "Women 40", "raceEvent": "iceman", "wave": None}
+        slush = {"name": "Other Rider", "division": "Men 40", "raceEvent": "slush-cup", "wave": None}
+        records = [
+            {"name": "Rider One", "division": "Men Singlespeed 40+", "wave": 2},
+            {"name": "Other Rider", "division": "Men 40", "wave": 3},
+        ]
+        output = io.StringIO()
+        with patch("sys.stdout", output):
+            self.assertEqual(supplement_wave_placements(
+                [first, second, slush], records, "wavePlacements",
+            ), 1)
+        self.assertEqual((first["wave"], first["waveSource"]), (2, "bsnyd"))
+        self.assertIsNone(second["wave"])
+        self.assertIsNone(slush["wave"])
+
+    def test_wave_join_skips_ambiguous_names_and_preserves_existing_waves(self):
+        existing = {"name": "Rider One", "division": "Men 40", "raceEvent": "iceman", "wave": 4}
+        same_name = {"name": "Rider One", "division": "Men 41", "raceEvent": "iceman", "wave": None}
+        records = [
+            {"name": "Rider One", "division": "Men 40", "wave": 4},
+            {"name": "Rider One", "division": "Men 42", "wave": 2},
+        ]
+        with patch("sys.stdout", io.StringIO()):
+            self.assertEqual(supplement_wave_placements(
+                [existing, same_name], records, "wavePlacements",
+            ), 1)
+        self.assertEqual(existing["wave"], 4)
+        self.assertIsNone(same_name["wave"])
+
+    def test_wave_join_rejects_conflicts_with_existing_assignments(self):
+        rider = {"name": "Rider One", "division": "Men 40", "raceEvent": "iceman", "wave": 4}
+        with self.assertRaisesRegex(ValueError, "conflicting wave"):
+            supplement_wave_placements(
+                [rider], [{"name": "Rider One", "division": "Men 40", "wave": 2}],
+                "wavePlacements",
+            )
+
+    def test_wave_join_skips_conflicting_source_duplicates(self):
+        rider = {"name": "Rider One", "division": "Men 40", "raceEvent": "iceman", "wave": None}
+        records = [
+            {"name": "Rider One", "division": "Men 40", "wave": 2},
+            {"name": "Rider One", "division": "Men 40", "wave": 3},
+        ]
+        with patch("sys.stdout", io.StringIO()):
+            self.assertEqual(supplement_wave_placements([rider], records, "wavePlacements"), 0)
+        self.assertIsNone(rider["wave"])
+
+    def test_historical_wave_sources_fill_assignments_without_inventing_starts(self):
+        for year, matched in ((2021, 3286), (2022, 3391), (2023, 3943), (2024, 4029)):
+            with self.subTest(year=year):
+                result = json.loads(Path(f"data/{year}/results.json").read_text())
+                riders = [dict(zip(result["fields"], row)) for row in result["riders"]]
+                sourced = [rider for rider in riders if rider["waveSource"] == "bsnyd"]
+                self.assertEqual(len(sourced), matched)
+                self.assertTrue(all(rider["start"] is None for rider in sourced))
+                self.assertIn("bsnyd.com/iceman/data/Iceman", result["race"]["dataSources"]
+                              ["wavePlacements"]["sourceUrl"])

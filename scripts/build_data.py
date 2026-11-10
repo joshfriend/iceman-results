@@ -210,6 +210,75 @@ def supplement_metadata(riders, records, source, allow_unmatched=False):
     return len(matched)
 
 
+def parse_wave_placements(path):
+    records = json.loads(path.read_text())
+    if not isinstance(records, list):
+        raise ValueError(f"{path}: expected a JSON array")
+    for line, record in enumerate(records, 1):
+        if not isinstance(record, dict) or set(record) != {"name", "division", "wave"}:
+            raise ValueError(f"{path}:{line}: expected name, division, and wave fields")
+        name, division, wave = record["name"], record["division"], record["wave"]
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"{path}:{line}: missing rider name")
+        if not isinstance(division, str):
+            raise ValueError(f"{path}:{line}: division must be a string")
+        if wave is not None and (not isinstance(wave, int) or isinstance(wave, bool) or wave <= 0):
+            raise ValueError(f"{path}:{line}: invalid wave {wave!r}")
+        yield {"name": name.strip(), "division": division.strip(), "wave": wave}
+
+
+def division_key(value):
+    text = re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+    text = re.sub(r"\bsingle\s*speed\b", "singlespeed", text)
+    text = re.sub(r"\bclydesdales\b", "clydesdale", text)
+    text = re.sub(r"\bfat tire\b", "fat bike", text)
+    return text
+
+
+def supplement_wave_placements(riders, records, source):
+    by_name = {}
+    for rider in riders:
+        if rider.get("raceEvent") == "iceman":
+            by_name.setdefault(person_key(rider["name"]), []).append(rider)
+
+    placements = {}
+    for record in records:
+        if record["wave"] is None:
+            continue
+        key = (person_key(record["name"]), division_key(record["division"]))
+        placements.setdefault(key, set()).add(record["wave"])
+
+    matched = set()
+    unmatched = 0
+    for (name, division), waves in placements.items():
+        if len(waves) != 1:
+            unmatched += 1
+            continue
+        candidates = by_name.get(name, [])
+        if len(candidates) > 1 and division:
+            candidates = [
+                rider for rider in candidates
+                if division_key(rider.get("division", "")) == division
+            ]
+        if len(candidates) != 1:
+            unmatched += 1
+            continue
+        rider = candidates[0]
+        if id(rider) in matched:
+            unmatched += 1
+            continue
+        wave = next(iter(waves))
+        if rider.get("wave") is not None and rider["wave"] != wave:
+            raise ValueError(f"{source}: conflicting wave for {rider['name']}")
+        matched.add(id(rider))
+        if rider.get("wave") is None:
+            rider["wave"] = wave
+            rider["waveSource"] = "bsnyd"
+
+    print(f"{source}: matched {len(matched)} wave placements; {unmatched} ambiguous or unmatched")
+    return len(matched)
+
+
 def parse_raceresult(path):
     """RaceResult overall list: BIB, ID, place|status, name, city, net, BIB, gender (rank), division (rank)."""
     source = json.loads(path.read_text())
@@ -662,6 +731,14 @@ def build_year(folder):
             "unmatched": len(records) - matched,
         })
 
+    wave_placements = config.get("wavePlacements")
+    if wave_placements:
+        supplement_wave_placements(
+            parsed_results,
+            parse_wave_placements(folder / wave_placements["path"]),
+            "wavePlacements",
+        )
+
     riders = []
     for r in parsed_results:
         r.setdefault("athlinksRacerId", None)
@@ -674,15 +751,25 @@ def build_year(folder):
             )
         if config.get("resultsFormat") not in {"registericeman", "athlinks"}:
             start, wave = starts.get(str(r["bib"]), (None, None))
-            for key, value in (("start", start), ("wave", wave)):
-                if value is not None and r.get(key) not in {None, value}:
-                    raise ValueError(f"{folder}: conflicting {key} for bib {r['bib']}")
-            start_source = "startList" if start is not None else r["startSource"]
-            wave_source = "startList" if wave is not None else r["waveSource"]
-            if not wave and start is not None and r["raceGroup"] == "amateur":
-                if start >= first_start and (start - first_start) % wave_seconds == 0:
-                    wave = (start - first_start) // wave_seconds + 1
-                    wave_source = "waveSchedule"
+            group_assignments = config.get("waveAssignments", {}).get(r["raceGroup"])
+            assignment = group_assignments.get(r["gender"]) if group_assignments else None
+            if group_assignments and not assignment:
+                raise ValueError(
+                    f"{folder}: no configured wave for {r['raceGroup']} gender {r['gender']!r}"
+                )
+            if assignment:
+                start, wave = seconds(assignment["start"]), assignment["wave"]
+                start_source = wave_source = "waveSchedule"
+            else:
+                for key, value in (("start", start), ("wave", wave)):
+                    if value is not None and r.get(key) not in {None, value}:
+                        raise ValueError(f"{folder}: conflicting {key} for bib {r['bib']}")
+                start_source = "startList" if start is not None else r["startSource"]
+                wave_source = "startList" if wave is not None else r["waveSource"]
+                if not wave and start is not None and r["raceGroup"] == "amateur":
+                    if start >= first_start and (start - first_start) % wave_seconds == 0:
+                        wave = (start - first_start) // wave_seconds + 1
+                        wave_source = "waveSchedule"
             r.update(
                 bib=int(r["bib"]), person=person_key(r["name"]),
                 start=start if start is not None else r.get("start"),
@@ -720,6 +807,7 @@ def build_year(folder):
             **config["sources"],
             "additionalResults": config.get("additionalResults", []),
             "riderMetadata": config.get("riderMetadata", []),
+            **({"wavePlacements": wave_placements} if wave_placements else {}),
         },
         "metadataCoverage": metadata_coverage,
     }

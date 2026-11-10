@@ -281,6 +281,25 @@ function percentile(sorted, p) {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
 }
 
+function distributionStats(times) {
+  const sorted = [...times].sort((a, b) => a - b);
+  const q1 = percentile(sorted, 0.25);
+  const q3 = percentile(sorted, 0.75);
+  const iqr = q3 - q1;
+  const lowerFence = q1 - 1.5 * iqr;
+  const upperFence = q3 + 1.5 * iqr;
+  return {
+    times,
+    n: times.length,
+    median: median(times),
+    q1, q3, lowerFence, upperFence,
+    whiskerMin: sorted.find((t) => t >= lowerFence),
+    whiskerMax: sorted.findLast((t) => t <= upperFence),
+    min: sorted[0],
+    max: sorted[sorted.length - 1],
+  };
+}
+
 export function raceRecap({ riders, finishers }) {
   const dns = riders.filter((rider) => rider.status === "DNS").length;
   const starters = riders.length - dns;
@@ -358,31 +377,45 @@ export function groupsFor(rider, finishers, race) {
 export function waveStats(finishers, race) {
   const byWave = new Map();
   for (const r of finishers) {
-    if (r.wave === null || r.wave === undefined || !Number.isFinite(r.start)) continue;
+    if (!Number.isInteger(r.wave)) continue;
     if (!byWave.has(r.wave)) byWave.set(r.wave, []);
     byWave.get(r.wave).push(r.net);
   }
   return [...byWave.keys()].sort((a, b) => a - b).map((wave) => {
     const times = byWave.get(wave);
-    const sorted = [...times].sort((a, b) => a - b);
-    const q1 = percentile(sorted, 0.25);
-    const q3 = percentile(sorted, 0.75);
-    const iqr = q3 - q1;
-    const lowerFence = q1 - 1.5 * iqr;
-    const upperFence = q3 + 1.5 * iqr;
     return {
       wave,
-      start: finishers.find((r) => r.wave === wave).start,
-      times,
-      n: times.length,
-      median: median(times),
-      q1, q3, lowerFence, upperFence,
-      whiskerMin: sorted.find((t) => t >= lowerFence),
-      whiskerMax: sorted.findLast((t) => t <= upperFence),
-      min: sorted[0],
-      max: sorted[sorted.length - 1],
+      start: finishers.find((r) => r.wave === wave && Number.isFinite(r.start))?.start ?? null,
+      ...distributionStats(times),
     };
   });
+}
+
+export function proWaveStats(finishers) {
+  return [
+    { gender: "M", label: "Pro men" },
+    { gender: "F", label: "Pro women" },
+  ].flatMap(({ gender, label }) => {
+    const members = finishers.filter((r) => r.raceGroup === "pro" && r.gender === gender);
+    if (!members.length) return [];
+    return [{
+      kind: "pro",
+      gender,
+      label,
+      wave: members.find((r) => Number.isInteger(r.wave))?.wave ?? null,
+      start: members.find((r) => Number.isFinite(r.start))?.start ?? null,
+      ...distributionStats(members.map((r) => r.net)),
+    }];
+  });
+}
+
+export function waveDistributions(rider, finishers, race) {
+  const groups = new Set(["amateur"]);
+  if (rider.raceGroup && rider.raceGroup !== "amateur" && rider.raceGroup !== "pro") {
+    groups.add(rider.raceGroup);
+  }
+  const field = finishers.filter((other) => groups.has(other.raceGroup ?? "amateur"));
+  return [...proWaveStats(finishers), ...waveStats(field, race)];
 }
 
 export function estimateNextWave(rider, history, waves, race) {

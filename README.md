@@ -8,10 +8,15 @@
 | `js/stats.js` | Pure stats (passes, groups, podium, KDE, wave stats, next-wave estimate) shared with tests |
 | `data/index.json` | **Generated.** Available races and years, newest first, with paths and event-specific counts |
 | `scripts/audit_sources.py` | Generates an optional offline source-coverage report at `data/source-audit.json`; the website does not load it |
-| `data/<year>/race.json` | Per-year config: date, results URL, wave timing when published, podium depth, optional wave time requirements, raw source paths |
+| `data/<year>/race.json` | Per-year config: date, results URL, wave timing when published, podium depth, optional wave time requirements and wave assignments, raw source paths |
 | `data/<year>/raw/` | Source data for that year (RaceResult JSON and start list, Registericeman results, or Athlinks results) |
 | `data/<year>/results.json` | **Generated.** Compact rider table the page loads |
 | `scripts/build_data.py` | Builds every `data/<year>/results.json` and `data/index.json` |
+| `data/<year>/raw/wave-placements.json` | Historical wave placement source data, when available |
+| `scripts/download_wave_placements.py` | Downloads 2021–2024 historical wave placements and stores them as JSON |
+| `scripts/download_splits.py` | Archives bulk checkpoint reports without fetching individual certificates |
+| `data/splits.json` | Offline split-source inventory by year; empty sources mean no intermediate splits were exposed by the archived providers |
+| `data/<year>/raw/*splits*.json.gz` | Gzip-compressed JSON split reports with original source responses |
 | `scripts/download_supplemental.py` | Downloads Slush Cup results, separate 2024–2026 pro/junior results, and published 2008/2010 category archives |
 
 ### Data format
@@ -34,7 +39,7 @@
 | `raceGroup` | `amateur`, `junior`, `pro` (including Pro/Cat 1), or `unclassified` when historical pro labels are unavailable |
 | `raceEvent` | `iceman`, `junior-iceman`, or `slush-cup`; junior age categories do not by themselves imply entry in the separate junior event |
 | `raceGroupSource` | `division`, `resultSet`, `metadata:N`, or `null` when classification is unknown |
-| `waveSource`, `startSource` | `results`, `startList`, `metadata:N`, `waveSchedule` (derived from the published schedule), or `null` |
+| `waveSource`, `startSource` | `results`, `startList`, `metadata:N`, `waveSchedule` (published schedule), `bsnyd` (historical wave placement), or `null` |
 
 The year recap counts all published entries, treats entries not marked DNS as starters for the
 finish rate, and shows finish-time quartiles and median times by published race group. Historical
@@ -46,34 +51,6 @@ Bars stack finishers with non-finishers (including DNS and DSQ) to total publish
 historical sources may omit non-finishers, so a fully finished bar does not establish a 100% finish rate.
 The year recap is hidden while an individual rider's report is displayed.
 Rider history marks years finishing within the published division podium depth (typically the top five).
-
-### Source quality and historical backfills
-
-Historical Athlinks categories are classified using the published category schema, not the
-presence of a pro finisher. Missing/ambiguous divisions remain unclassified unless an explicit
-course or supplemental source establishes their group. Age alone never establishes a junior
-category. Original published category names are preserved when supplemental sources provide them.
-Separate junior-event result sets explicitly set `raceEvent: "junior-iceman"` in
-`race.json`; otherwise the entered event defaults to `iceman`.
-Slush Cup (approximately 8 miles) is available as a separate race selection. Its results are
-included in each published year with an available result source, but are excluded from Iceman
-standings, recaps, and rider histories. The Sno-Cone is a separate half-mile youth race.
-
-RunMichigan's 2008 and 2010 archives provide **men's category tables only**. Metadata joins require
-an exact normalized name, gender, and finish time, plus matching bibs when both sources publish
-them. Missing bibs can be recovered; truncated names, mismatches, and absent results are not
-guessed. Ambiguous matches, repeated metadata, and conflicting assignments fail the build.
-Unmatched archive rows are logged and counted in `race.metadataCoverage` and the source audit.
-`race.dataSources` identifies the archived files and supplemental URLs; `metadata:N` refers to
-the zero-based entry in its `riderMetadata` array.
-
-The audited Athlinks result rows for 2001–2025 contain no wave/corral/start fields. Registration's
-2022–2024 historical result links point back to Athlinks, not additional wave exports. Older
-assigned waves still need final start lists or organizer/timer exports; qualifying-time standards,
-bib ranges, and finish speeds are not substitutes for actual assignments. Request public results
-metadata from the [organizer](https://www.iceman.com/p/about/contact): year, bib, rider name,
-gender, finish time, entered event/category, final assigned wave, and scheduled start. No
-organizer request is sent by these scripts.
 
 To import an organizer export, normalize its public race fields to a CSV and add an entry to
 that year's `race.json`:
@@ -101,6 +78,7 @@ registration fields out of archived exports.
 ```sh
 npm run download:history # fetch Athlinks results for 2001–2025; preserve primary sources
 npm run download:supplemental # fetch Slush Cup, separate pro/junior lists, and category archives
+npm run download:splits # archive all available years' published split reports
 npm run build:data   # after changing raw data
 npm run audit:sources # refresh the offline source inventory after rebuilding data
 npm test             # Node's built-in test runner, no dependencies
