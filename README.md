@@ -7,7 +7,7 @@
 | `index.html`, `style.css`, `js/app.js` | Page and D3 charts (D3 loaded from jsDelivr) |
 | `js/stats.js` | Pure stats (passes, groups, podium, KDE, wave stats, next-wave estimate) shared with tests |
 | `data/index.json` | **Generated.** Available races and years, newest first, with paths and event-specific counts |
-| `data/source-audit.json` | **Generated.** Per-year race-event counts, wave/category coverage, archived course inventory, and unmatched metadata counts |
+| `scripts/audit_sources.py` | Generates an optional offline source-coverage report at `data/source-audit.json`; the website does not load it |
 | `data/<year>/race.json` | Per-year config: date, results URL, wave timing when published, podium depth, optional wave time requirements, raw source paths |
 | `data/<year>/raw/` | Source data for that year (RaceResult JSON and start list, Registericeman results, or Athlinks results) |
 | `data/<year>/results.json` | **Generated.** Compact rider table the page loads |
