@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
-  comparisonField, comparisonRank, estimateNextWave, findRiders, findYearRiders, groupsFor, kde, parseRace,
+  comparisonField, comparisonRank, estimateNextWave, findRiders, findYearRiders, groupsFor, juniorCategoryStats, kde, parseRace,
   passCounts, proWaveStats, raceRecap, riderHistory, selectRaceEvent, waveDistributions, waveStats,
   winnerGaps,
 } from "../js/stats.js";
@@ -551,6 +551,25 @@ test("amateur wave stats cover 45 waves, with junior/pro starts separate", () =>
   assert.equal(w29.median, 9940.5);
 });
 
+test("junior categories are appended after pro and amateur wave distributions", () => {
+  const junior = riders.find((r) => r.bib === 6258);
+  const waves = waveDistributions(junior, finishers, race);
+  const juniorCategories = juniorCategoryStats(finishers);
+  assert.deepEqual(juniorCategories.map(({ label }) => label), [
+    "Junior Men 15-16",
+    "Junior Men 17-18",
+    "Junior Men U15",
+    "Junior Women 15-16",
+    "Junior Women 17-18",
+    "Junior Women U15",
+  ]);
+  assert.deepEqual(waves.slice(-juniorCategories.length).map(({ label }) => label),
+    juniorCategories.map(({ label }) => label));
+  assert.equal(waves.find((w) => w.kind === "junior" && w.label === junior.division).n, 47);
+  assert.equal(waves.some((w) => w.wave === 0), false);
+  assert.equal(groupsFor(junior, finishers, race).at(-1).title, "Junior start (12:00)");
+});
+
 test("pro comparison distributions merge by gender and precede the selected wave rows", () => {
   const pro = proWaveStats(finishers);
   assert.deepEqual(pro.map(({ label, wave, start, n }) => [label, wave, start, n]), [
@@ -563,7 +582,7 @@ test("pro comparison distributions merge by gender and precede the selected wave
   assert.equal(pro.find((w) => adam.gender === w.gender).n, 91);
   const adamWaves = waveDistributions(adam, finishers, race);
   assert.deepEqual(adamWaves.slice(0, 2).map((w) => w.label), ["Pro men", "Pro women"]);
-  assert.equal(adamWaves.length, 47);
+  assert.equal(adamWaves.length, 53);
   assert.ok(adamWaves.some((w) => w.wave === 1 && w.n > 0));
   assert.ok(adamWaves.some((w) => w.wave === 29 && w.n === 76));
   assert.ok(!adamWaves.some((w) => w.wave === 55 && !w.label));
@@ -587,7 +606,7 @@ test("wave boxes use interpolated quartiles and observed whiskers, keeping outli
   assert.deepEqual(members.map((r) => r.net), times);
 });
 
-test("historical wave distributions do not require scheduled start times", () => {
+test("historical junior category distributions do not require scheduled start times", () => {
   for (const year of [2021, 2022, 2023, 2024, 2025]) {
     const data = parseIceman(`${year}/results.json`);
     const rider = year === 2022
@@ -601,7 +620,7 @@ test("historical wave distributions do not require scheduled start times", () =>
     assert.equal(waves.slice(0, 2).reduce((sum, w) => sum + w.n, 0), pros.length);
     if (year === 2022) {
       assert.equal(rider.start, null);
-      assert.ok(waves.some((w) => w.wave === rider.wave && w.start === null));
+      assert.ok(waves.some((w) => w.kind === "junior" && w.label === rider.division && w.start === null));
     }
   }
 });

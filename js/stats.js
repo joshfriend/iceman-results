@@ -368,7 +368,10 @@ export function groupsFor(rider, finishers, race) {
       field.filter((r) => r.division === rider.division), rider, rider.divisionRank));
   }
   if (rider.wave !== null && rider.wave !== undefined) {
-    groups.push(summarize("wave", `Wave ${rider.wave} (${clockTime(rider.start)})`,
+    const waveTitle = rider.wave === 0 && rider.raceGroup === "junior"
+      ? `Junior start (${clockTime(rider.start)})`
+      : `Wave ${rider.wave} (${clockTime(rider.start)})`;
+    groups.push(summarize("wave", waveTitle,
       field.filter((r) => r.wave === rider.wave), rider, null));
   }
   return groups;
@@ -383,9 +386,13 @@ export function waveStats(finishers, race) {
   }
   return [...byWave.keys()].sort((a, b) => a - b).map((wave) => {
     const times = byWave.get(wave);
+    const members = finishers.filter((r) => r.wave === wave);
+    const label = wave === 0 && members.length > 0
+      && members.every((r) => r.raceGroup === "junior") ? "Junior start" : null;
     return {
       wave,
       start: finishers.find((r) => r.wave === wave && Number.isFinite(r.start))?.start ?? null,
+      ...(label ? { label } : {}),
       ...distributionStats(times),
     };
   });
@@ -409,13 +416,30 @@ export function proWaveStats(finishers) {
   });
 }
 
-export function waveDistributions(rider, finishers, race) {
-  const groups = new Set(["amateur"]);
-  if (rider.raceGroup && rider.raceGroup !== "amateur" && rider.raceGroup !== "pro") {
-    groups.add(rider.raceGroup);
+export function juniorCategoryStats(finishers) {
+  const categories = new Map();
+  for (const rider of finishers) {
+    if (rider.raceGroup !== "junior") continue;
+    const category = rider.division || `Junior ${rider.gender === "F" ? "women" : "men"}`;
+    if (!categories.has(category)) categories.set(category, []);
+    categories.get(category).push(rider.net);
   }
-  const field = finishers.filter((other) => groups.has(other.raceGroup ?? "amateur"));
-  return [...proWaveStats(finishers), ...waveStats(field, race)];
+  return [...categories].sort(([a], [b]) => a.localeCompare(b)).map(([label, times]) => ({
+    kind: "junior",
+    label,
+    wave: null,
+    start: null,
+    ...distributionStats(times),
+  }));
+}
+
+export function waveDistributions(rider, finishers, race) {
+  const amateurField = finishers.filter((other) => (other.raceGroup ?? "amateur") === "amateur");
+  return [
+    ...proWaveStats(finishers),
+    ...waveStats(amateurField, race),
+    ...juniorCategoryStats(finishers),
+  ];
 }
 
 export function estimateNextWave(rider, history, waves, race) {
