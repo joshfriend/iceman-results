@@ -13,7 +13,7 @@ Static GitHub Pages site. Enter a bib number (or name) to see:
 - **Box plot by wave**: median ± 1 SD box, fastest–slowest range, every finisher as a dot,
   and the rider's wave and time highlighted.
 
-Link to a rider directly with `?bib=4026`; add `&year=2026` to pin a year (defaults to the latest).
+Looking up a rider puts it in the URL (`?year=2026&bib=4026`) so the address bar, or the **Copy link** button, can be shared. Name searches resolve to the bib. Links without `year` use the latest year.
 
 ## Layout
 

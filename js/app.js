@@ -41,15 +41,45 @@ $("lookup").addEventListener("submit", (event) => {
   event.preventDefault();
   lookup($("query").value);
 });
-window.addEventListener("popstate", () => loadFromUrl());
+window.addEventListener("popstate", () => {
+  const year = Number(new URLSearchParams(location.search).get("year"));
+  if (year && year !== data.race.year) location.reload();
+  else loadFromUrl();
+});
+$("copy-link").addEventListener("click", async () => {
+  await navigator.clipboard.writeText(location.href);
+  $("copy-link").textContent = "Link copied";
+  setTimeout(() => { $("copy-link").textContent = "Copy link"; }, 1600);
+});
 loadFromUrl();
 
 function loadFromUrl() {
   const bib = new URLSearchParams(location.search).get("bib") ?? location.hash.replace(/^#/, "");
+  $("query").value = bib;
   if (bib) {
-    $("query").value = bib;
     lookup(bib, false);
+  } else {
+    clearResult();
   }
+}
+
+// Shared links always pin the year, since bibs are reassigned every year.
+function setUrlBib(bib, replace = false) {
+  const params = new URLSearchParams();
+  params.set("year", data.race.year);
+  params.set("bib", bib);
+  const url = `?${params}`;
+  if (url === location.search) return;
+  if (replace) history.replaceState(null, "", url);
+  else history.pushState(null, "", url);
+}
+
+function clearResult() {
+  $("report").hidden = true;
+  $("matches").hidden = true;
+  $("matches").replaceChildren();
+  setMessage("");
+  document.title = `${raceTitle} results`;
 }
 
 function setMessage(text, error = false) {
@@ -87,12 +117,7 @@ function lookup(query, push = true) {
     return;
   }
   const rider = matches[0];
-  if (push) {
-    const params = new URLSearchParams(location.search);
-    params.set("bib", rider.bib);
-    params.delete("r");
-    history.pushState(null, "", `?${params}`);
-  }
+  setUrlBib(rider.bib, !push);
   show(rider);
 }
 

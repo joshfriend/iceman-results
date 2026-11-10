@@ -79,6 +79,18 @@ h3 { font-size: 1.3rem; margin: 40px 0 8px; }
   font-size: 0.95rem;
   font-variant-numeric: tabular-nums;
 }
+.copy-link {
+  margin-left: auto;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--teal);
+  background: none;
+  border: 1px solid var(--grid);
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.copy-link:hover { border-color: var(--teal); }
 .chip-label { color: var(--muted); font-size: 0.68rem; letter-spacing: 0.05em; text-transform: uppercase; }
 
 .facts {
