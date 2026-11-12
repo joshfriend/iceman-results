@@ -4,7 +4,7 @@ import {
   clockTime, comparisonRank, duration, estimateNextWave, findRiders, findYearRiders,
   groupsFor, hm, hms, kde, ordinal, parseRace, passCounts, passDistribution, podium, riderHistory, waveDistributions,
   winnerGaps, raceRecap, selectRaceEvent,
-} from "./stats.js?v=6";
+} from "./stats.js?v=7";
 
 const AWARDS = {
   1: { name: "Gold", color: "#c9a227" },

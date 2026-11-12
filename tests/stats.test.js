@@ -746,6 +746,25 @@ test("next-wave estimate uses time requirements and shows the selected wave medi
   });
 });
 
+test("next-wave estimate ignores pro and junior distributions without amateur wave assignments", () => {
+  const rider = { bib: 123, person: "rider", finished: true, wave: 2, raceGroup: "amateur" };
+  const history = [2023, 2024, 2025].map((year, i) => ({
+    race: { year },
+    finishers: [{ ...rider, net: [80, 90, 100][i] }],
+  }));
+  const waves = [
+    { kind: "pro", wave: 1, median: 80 },
+    { wave: 1, median: 95 },
+    { wave: 2, median: 120 },
+    { kind: "junior", wave: null, median: 91 },
+  ];
+
+  const result = estimateNextWave(rider, history, waves, { year: 2025 });
+  assert.equal(result.wave, 1);
+  assert.equal(result.wavesAhead, 1);
+  assert.equal(result.waveMedian, 95);
+});
+
 test("next-wave estimate returns null for non-finishers and disambiguates repeated names by city", () => {
   const rider = { bib: 123, person: "rider", city: "Town", finished: true, wave: 2 };
   const history = [

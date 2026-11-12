@@ -449,7 +449,9 @@ export function waveDistributions(rider, finishers, race) {
 }
 
 export function estimateNextWave(rider, history, waves, race) {
-  if (!rider.finished || !rider.person || !rider.wave || waves.length === 0
+  const amateurWaves = waves.filter((wave) =>
+    wave.kind !== "pro" && wave.kind !== "junior" && Number.isInteger(wave.wave));
+  if (!rider.finished || !rider.person || !rider.wave || amateurWaves.length === 0
     || (rider.raceGroup && rider.raceGroup !== "amateur")) return null;
 
   const historyStart = race.year - 4;
@@ -484,10 +486,10 @@ export function estimateNextWave(rider, history, waves, race) {
   const projectedWave = requirements?.length
     ? requirements.slice(0, -1).findIndex((requirement) => average < requirement) + 1
       || requirements.length
-    : waves.reduce((closest, wave) =>
+    : amateurWaves.reduce((closest, wave) =>
       Math.abs(wave.median - average) < Math.abs(closest.median - average) ? wave : closest,
     ).wave;
-  const projected = waves.find((wave) => wave.wave === projectedWave);
+  const projected = amateurWaves.find((wave) => wave.wave === projectedWave);
   return {
     wave: projectedWave,
     currentWave: rider.wave,
