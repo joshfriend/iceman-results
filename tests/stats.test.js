@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
-  comparisonField, comparisonRank, estimateNextWave, findRiders, findYearRiders, groupsFor, juniorCategoryStats, kde, parseRace,
+  comparisonField, comparisonRank, divisionLabel, estimateNextWave, findRiders, findYearRiders, groupsFor, juniorCategoryStats, kde, parseRace,
   passCounts, passDistribution, proWaveStats, raceRecap, riderHistory, selectRaceEvent, waveDistributions, waveStats,
   winnerGaps,
 } from "../js/stats.js";
@@ -613,16 +613,61 @@ test("junior categories are appended after pro and amateur wave distributions", 
   assert.deepEqual(juniorCategories.map(({ label }) => label), [
     "Junior Men 15-16",
     "Junior Men 17-18",
-    "Junior Men U15",
+    "Junior Men Under 15",
     "Junior Women 15-16",
     "Junior Women 17-18",
-    "Junior Women U15",
+    "Junior Women Under 15",
   ]);
   assert.deepEqual(waves.slice(-juniorCategories.length).map(({ label }) => label),
     juniorCategories.map(({ label }) => label));
   assert.equal(waves.find((w) => w.kind === "junior" && w.label === junior.division).n, 47);
   assert.equal(waves.some((w) => w.wave === 0), false);
   assert.equal(groupsFor(junior, finishers, race).at(-1).title, "Junior start (12:00)");
+});
+
+test("junior overall divisions are omitted from category distributions", () => {
+  assert.deepEqual(juniorCategoryStats(finishers2025).map(({ label }) => label), [
+    "Junior Women 9-14",
+    "Junior Women 15-16",
+    "Junior Women 17-18",
+    "Junior Men 9-14",
+    "Junior Men 15-16",
+    "Junior Men 17-18",
+  ]);
+  assert.equal(juniorCategoryStats(finishers2025)[0].division, "F0914");
+});
+
+test("junior category labels normalize legacy formats across years", () => {
+  const categoriesFor = (year) => juniorCategoryStats(parseIceman(`${year}/results.json`).finishers)
+    .map(({ label }) => label);
+  assert.ok(categoriesFor(2001).includes("Junior Women 10-14"));
+  assert.ok(categoriesFor(2016).includes("Junior Men 9-14"));
+  assert.ok(categoriesFor(2017).includes("Junior Women 9-14"));
+  assert.ok(categoriesFor(2024).includes("Junior Men 14 and under"));
+  assert.ok(categoriesFor(2026).includes("Junior Women Under 15"));
+  assert.ok(!categoriesFor(2023).some((label) => /overall$/i.test(label)));
+  assert.ok(!categoriesFor(2024).some((label) => /overall$/i.test(label)));
+});
+
+test("division display labels are shared without changing division membership", () => {
+  for (const year of dataIndex.years) {
+    const data = parseIceman(`${year.year}/results.json`);
+    for (const category of juniorCategoryStats(data.finishers)) {
+      const rider = data.finishers.find((r) =>
+        r.raceGroup === "junior" && r.division === category.division);
+      if (!rider) continue;
+      const originalDivision = rider.division;
+      const group = groupsFor(rider, data.finishers, data.race).find((g) => g.key === "division");
+      assert.equal(divisionLabel(rider), category.label);
+      assert.equal(group.title, category.label);
+      assert.equal(group.n, category.n);
+      assert.equal(rider.division, originalDivision);
+    }
+  }
+  assert.equal(divisionLabel(riders2025.find((r) => r.bib === 6247)), "Junior Women 9-14");
+  assert.equal(divisionLabel({ division: "F Overall", raceGroup: "junior" }), "Junior Women Overall");
+  assert.equal(divisionLabel({ division: "F0914", raceGroup: "amateur" }), "F0914");
+  assert.equal(divisionLabel({ raceGroup: "junior" }), "");
 });
 
 test("pro comparison distributions merge by gender and precede the selected wave rows", () => {

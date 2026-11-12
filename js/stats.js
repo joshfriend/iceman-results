@@ -358,6 +358,25 @@ function summarize(key, title, members, rider, officialRank) {
   };
 }
 
+export function divisionLabel(rider) {
+  const division = rider.division || "";
+  if (rider.raceGroup !== "junior") return division;
+  const ageGroup = /^([FM])(\d{2})(\d{2})$/.exec(division)
+    ?? /^([FM])\s*(\d{1,2})-(\d{1,2})(?:\s+Juniors?)?$/i.exec(division);
+  if (ageGroup) {
+    return `Junior ${ageGroup[1].toUpperCase() === "F" ? "Women" : "Men"} ${Number(ageGroup[2])}-${Number(ageGroup[3])}`;
+  }
+  const juniorGroup = /^Juniors?\s+(Men|Women)\s+(.+)$/i.exec(division);
+  if (juniorGroup) {
+    const gender = juniorGroup[1][0].toUpperCase() + juniorGroup[1].slice(1).toLowerCase();
+    const ages = juniorGroup[2].replace(/^U(\d+)$/i, "Under $1")
+      .replace(/^(\d+)-under$/i, "$1 and under");
+    return `Junior ${gender} ${ages}`;
+  }
+  const overall = /^([FM]) Overall$/i.exec(division);
+  return overall ? `Junior ${overall[1].toUpperCase() === "F" ? "Women" : "Men"} Overall` : division;
+}
+
 export function groupsFor(rider, finishers, race) {
   const gender = rider.gender === "F" ? "Women" : rider.gender === "M" ? "Men" : rider.gender;
   const field = comparisonField(rider, finishers);
@@ -370,7 +389,7 @@ export function groupsFor(rider, finishers, race) {
     summarize("gender", gender, field.filter((r) => r.gender === rider.gender), rider, null),
   ];
   if (rider.division) {
-    groups.push(summarize("division", rider.division,
+    groups.push(summarize("division", divisionLabel(rider),
       field.filter((r) => r.division === rider.division), rider, rider.divisionRank));
   }
   if (rider.wave !== null && rider.wave !== undefined) {
@@ -427,12 +446,14 @@ export function juniorCategoryStats(finishers) {
   for (const rider of finishers) {
     if (rider.raceGroup !== "junior") continue;
     const category = rider.division || `Junior ${rider.gender === "F" ? "women" : "men"}`;
+    if (/\boverall$/i.test(category)) continue;
     if (!categories.has(category)) categories.set(category, []);
     categories.get(category).push(rider.net);
   }
-  return [...categories].sort(([a], [b]) => a.localeCompare(b)).map(([label, times]) => ({
+  return [...categories].sort(([a], [b]) => a.localeCompare(b)).map(([division, times]) => ({
     kind: "junior",
-    label,
+    division,
+    label: divisionLabel({ division, raceGroup: "junior" }),
     wave: null,
     start: null,
     ...distributionStats(times),

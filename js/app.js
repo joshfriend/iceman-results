@@ -1,10 +1,10 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
 import {
-  clockTime, comparisonRank, duration, estimateNextWave, findRiders, findYearRiders,
+  clockTime, comparisonRank, divisionLabel, duration, estimateNextWave, findRiders, findYearRiders,
   groupsFor, hm, hms, kde, ordinal, parseRace, passCounts, passDistribution, podium, riderHistory, waveDistributions,
   winnerGaps, raceRecap, selectRaceEvent,
-} from "./stats.js?v=7";
+} from "./stats.js?v=9";
 
 const AWARDS = {
   1: { name: "Gold", color: "#c9a227" },
@@ -286,7 +286,7 @@ function lookup(query, push = true) {
         rider.name,
         rider.bib === null ? "" : `#${rider.bib}`,
         rider.city,
-        rider.division,
+        divisionLabel(rider),
       ].filter(Boolean).join(" · ");
       button.addEventListener("click", () => {
         const query = rider.bib === null ? rider.name : String(rider.bib);
@@ -309,7 +309,7 @@ function show(rider) {
   $("rider-city").textContent = rider.city;
   $("rider-chips").replaceChildren(
     chip("Bib", rider.bib ?? "Not listed"),
-    chip("Division", rider.division || "None listed"),
+    chip("Division", divisionLabel(rider) || "None listed"),
     chip("Field", rider.raceGroup),
   );
   waves = waveDistributions(rider, data.finishers, data.race);
@@ -489,7 +489,7 @@ async function renderHistory(rider) {
         const mark = document.createElement("span");
         mark.className = "podium-mark";
         mark.textContent = `${ordinal(divisionPodium.place)} podium`;
-        mark.title = `${ordinal(divisionPodium.place)} place in ${result.rider.division}`;
+        mark.title = `${ordinal(divisionPodium.place)} place in ${divisionLabel(result.rider)}`;
         yearCell.append(" ", mark);
       }
       row.append(yearCell);
@@ -599,7 +599,7 @@ function podiumFact(rider) {
   if (!result) {
     return { label: "Division podium", value: "–", note: "no division listed" };
   }
-  const where = `of ${fmt(result.size)} in ${rider.division}`;
+  const where = `of ${fmt(result.size)} in ${divisionLabel(rider)}`;
   if (result.onPodium) {
     const award = AWARDS[result.place];
     const value = document.createDocumentFragment();
@@ -775,7 +775,7 @@ function drawWaves(rider) {
       ? rider.raceGroup === "pro" && rider.gender === w.gender
       : w.kind === "junior"
         ? rider.raceGroup === "junior"
-          && (rider.division || `Junior ${rider.gender === "F" ? "women" : "men"}`) === w.label
+          && (rider.division || `Junior ${rider.gender === "F" ? "women" : "men"}`) === w.division
         : rider.raceGroup === "amateur" && w.wave === rider.wave;
     const color = mineRow ? COLORS.accent : COLORS.blue;
     const cy = rowY(i);
@@ -844,7 +844,7 @@ function drawWaves(rider) {
     ? rider.raceGroup === "pro" && rider.gender === w.gender
     : w.kind === "junior"
       ? rider.raceGroup === "junior"
-        && (rider.division || `Junior ${rider.gender === "F" ? "women" : "men"}`) === w.label
+        && (rider.division || `Junior ${rider.gender === "F" ? "women" : "men"}`) === w.division
       : rider.raceGroup === "amateur" && w.wave === rider.wave);
   if (myRow >= 0) {
     svg.append("circle").attr("cx", mine).attr("cy", rowY(myRow)).attr("r", 5)
