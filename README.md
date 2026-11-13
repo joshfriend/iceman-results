@@ -6,13 +6,14 @@
 |---|---|
 | `index.html`, `style.css`, `js/app.js` | Page and D3 charts (D3 loaded from jsDelivr) |
 | `js/stats.js` | Pure stats (passes, groups, podium, KDE, wave stats, next-wave estimate) shared with tests |
-| `data/index.json` | **Generated.** Available races and years, newest first, with paths and event-specific counts |
+| `data/index.json` | **Generated.** Available races and years, newest first, with paths, event-specific counts, and Iceman yearly winner time/speed and course-distance summaries |
 | `scripts/audit_sources.py` | Generates an optional offline source-coverage report at `data/source-audit.json`; the website does not load it |
-| `data/<year>/race.json` | Per-year config: date, results URL, wave timing when published, podium depth, optional wave time requirements and wave assignments, raw source paths |
+| `data/<year>/race.json` | Per-year config: date, results URL, wave timing when published, podium depth, optional wave time requirements and wave assignments, raw source paths and attribution |
 | `data/<year>/raw/` | Source data for that year (RaceResult JSON and start list, Registericeman results, or Athlinks results) |
 | `data/<year>/results.json` | **Generated.** Compact rider table the page loads |
-| `scripts/build_data.py` | Builds every `data/<year>/results.json` and `data/index.json` |
+| `scripts/build_data.py` | Builds every `data/<year>/results.json`, `data/<year>/splits.json`, and `data/index.json` |
 | `data/<year>/raw/wave-placements.json` | Historical wave placement source data, when available |
+| `data/<year>/raw/pass-counts.csv` | Archived 2021–2023 pass-count spreadsheet exports; source URLs and credits are recorded in `race.json` |
 | `data/<year>/raw/wave-schedule.json` | Transcribed organizer schedules with Wayback snapshot provenance in `race.json` |
 | `scripts/download_wave_placements.py` | Downloads 2021–2024 historical wave placements and stores them as JSON |
 | `scripts/download_splits.py` | Archives bulk checkpoint reports without fetching individual certificates |
@@ -21,6 +22,21 @@
 | `scripts/download_supplemental.py` | Downloads Slush Cup results, separate 2024–2026 pro/junior results, and published 2008/2010 category archives |
 
 ### Data format
+
+Per-year `race.json` may include `splitLocations`, mapping published split labels
+to known checkpoint locations without changing the raw source data. For 2025,
+`8.4 Mile` is Dockery Rd and `16.6 Mile` is North Broomhead Rd.
+The rider page shows these names in its checkpoint splits table.
+
+`data/<year>/splits.json` is **generated** from the archived split reports listed in `data/splits.json`
+(years without published checkpoints have none, and `index.json` links to those that exist). It is
+`{courses: [{checkpoints: [{name, miles, location}], riders: {bib: [elapsed seconds per checkpoint]}}]}`;
+`miles` is cumulative and `null` when no distance is known (a missed checkpoint's time is `null`).
+RaceResult publishes no 2026 checkpoint distances, so `race.json` records `splitDistances`: the GPS distance
+from the gun to each timing mat in a rider's 2026 Garmin activity (the 2025 course file doesn't match the 2026
+route). The build keeps those fractions of the course and scales them to the distance implied by the year's
+published speeds, marking the course `estimated` with a `finishMiles` for riders without their own course distance. Readings that break the checkpoint order are dropped. The rider page adds a finish row from
+the official time and `courseDistance`, and computes leg times and speeds between timed checkpoints.
 
 `results.json` is `{race, fields, riders}`. `race` holds the year's settings (name, year, date,
 `firstStart` and `waveSeconds` in seconds, `podiumDepth`). `riders` is an array of rows in `fields` order:
@@ -34,6 +50,8 @@
 | `name`, `city` | As published |
 | `status` | Published overall place (number) or `DNF` / `DNS` / `DSQ`; intermediate-only results are `DNF` |
 | `net` | Complete-course time in seconds, `null` for non-finishers |
+| `avgSpeed` | Complete-course average speed in mph, `null` for non-finishers or unavailable speeds; uses published mph or Athlinks speed records, falling back to published course distance and unrounded finish time |
+| `courseDistance` | Published course distance in miles when available, otherwise `null`; Registericeman segment distances are summed through the finish |
 | `gender`, `genderRank` | `M`/`F` and gender place |
 | `division`, `divisionRank` | Division name and place |
 | `start`, `wave` | Scheduled start (seconds after midnight) and wave number |
@@ -50,9 +68,40 @@ Its entries-by-year chart uses every available year's published result-row count
 that year's recap, and the selected year is highlighted.
 Bars stack finishers with non-finishers (including DNS and DSQ) to total published entries;
 historical sources may omit non-finishers, so a fully finished bar does not establish a 100% finish rate.
+Rider summaries and history show a finisher's published `avgSpeed`; when it is missing they calculate it from
+the rider's `courseDistance`, or else from the distance implied by that event's other published speeds and
+finish times (median of speed × time), divided by the rider's finish time.
+The Iceman recap also plots the yearly fastest men's and women's average speeds, regardless of race group
+or wave, with a Time/Speed toggle (default: Speed). Winners are selected by valid finish time, not by
+highest reported speed. Speed uses each winner's published mph or Athlinks speed record, falling back to
+published course distance and unrounded finish time, never an assumed distance. Missing years appear as gaps; point tooltips show each gender's
+finisher count. The index includes each winner's finish time and average speed.
+A separate course-distance chart uses the fastest finisher's published course distance (Athlinks course
+distance or Registericeman finish-segment total). If only rounded mph and finish times are available,
+distance is the mean of speed × time over every finisher with a published speed (the rounding
+errors cancel) and is marked approximate with a hollow point. These are source distances,
+not GPS measurements; missing years remain gaps. The index records `courseDistance` and
+`courseDistanceEstimated`.
+For the selected Iceman year, another chart plots median finish time by age and gender, regardless of
+race group or wave. It prefers published ages and falls back to bounded division ages/ranges, plotted
+at their midpoints with actual ranges in tooltips. Distinct ranges remain separate even when their
+midpoints match. Open-ended divisions and catch-all ranges ending in 99 without a published age are
+excluded, rather than treating (for example) Singlespeed Men 40-99 as riders aged 69.5.
 The year recap is hidden while an individual rider's report is displayed.
+Each rider finish-time distribution uses its own category's 99.5th percentile for the upper axis
+bound, rounded up to a half hour and extended as needed to keep the rider's finish visible.
+Histograms use 24 equal-width bins across that category's displayed range, so narrower ranges
+also use narrower time bins.
 Rider history marks years finishing within the published division podium depth (typically the top five).
-
+Its finish trend can switch between time and average speed; speeds missing from the source are calculated from course distance and finish time, while
+the results table combines finish time and average speed in one column, alongside time change.
+Historical podium indicators use a compact colored trophy and place label.
+When published wave time requirements are available, the recap charts each amateur's average of up to
+three fastest unambiguous finishes in the five preceding calendar years against the time cutoff for their
+actual wave. One histogram buckets how many minutes faster or slower the average is than that cutoff;
+another shows how many waves earlier or later the actual assignment is than the wave implied by the average.
+The time-margin histogram includes waves with "faster than" cutoffs (1-37); the wave-difference chart
+also includes Wave 38's "or slower" threshold but excludes first-time Waves 39-48.
 To import an organizer export, normalize its public race fields to a CSV and add an entry to
 that year's `race.json`:
 

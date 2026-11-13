@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
-  comparisonField, comparisonRank, divisionLabel, estimateNextWave, findRiders, findYearRiders, groupsFor, juniorCategoryStats, kde, parseRace,
-  passCounts, passDistribution, proWaveStats, raceRecap, riderHistory, selectRaceEvent, waveDistributions, waveStats,
+  ageGenderFinishTimes, comparisonField, comparisonRank, divisionLabel, estimateNextWave, findRiders, findYearRiders, groupsFor, juniorCategoryStats, kde, parseRace,
+  passCounts, passDistribution, proWaveStats, raceRecap, riderHistory, riderSplits, selectRaceEvent, waveDistributions, waveStats,
   winnerGaps,
 } from "../js/stats.js";
 
@@ -16,6 +16,56 @@ const { riders: riders2025, finishers: finishers2025 } = parseIceman("2025/resul
 const { riders: riders2001, finishers: finishers2001 } = parseIceman("2001/results.json");
 const { riders: riders2024, finishers: finishers2024 } = parseIceman("2024/results.json");
 const josh = riders.find((r) => r.bib === 4026);
+
+test("age and gender finish-time data summarizes all finishers by exact age", () => {
+  assert.deepEqual(ageGenderFinishTimes([
+    { age: 30, gender: "M", net: 1000, speed: 20, raceGroup: "pro" },
+    { age: 30, gender: "M", net: 1200, speed: 16, raceGroup: "amateur" },
+    { age: 30, gender: "F", net: 1400, raceGroup: "junior" },
+    { age: 32, gender: "F", net: 1600 },
+    { age: null, gender: "M", net: 900 },
+    { age: 30.5, gender: "F", net: 1000 },
+    { age: 0, gender: "F", net: 1000 },
+    { age: 31, gender: "X", net: 1000 },
+    { age: 31, gender: "M", net: 0 },
+  ]), [
+    { age: 30, ageMin: 30, ageMax: 30, menMedian: 1100, menFinishers: 2, womenMedian: 1400, womenFinishers: 1, menMedianSpeed: 18, womenMedianSpeed: null },
+    { age: 32, ageMin: 32, ageMax: 32, menMedian: null, menFinishers: 0, womenMedian: 1600, womenFinishers: 1, menMedianSpeed: null, womenMedianSpeed: null },
+  ]);
+});
+
+test("age chart falls back to bounded divisions without merging distinct ranges or overriding ages", () => {
+  const rows = ageGenderFinishTimes([
+    { division: "Men 46", gender: "M", net: 1000 },
+    { division: "M4646", gender: "M", net: 1200 },
+    { division: "Women 45-47", gender: "F", net: 1500 },
+    { division: "Women 45-47", gender: "F", net: 1700 },
+    { division: "Women 45-47", age: 45, gender: "F", net: 1300 },
+    { division: "Women 40+", gender: "F", net: 900 },
+    { division: "Junior Men U15", gender: "M", net: 800 },
+    { division: "Men 99-40", gender: "M", net: 700 },
+    { division: "Women 121", gender: "F", net: 600 },
+    { division: "Pro/Cat 1 F", gender: "F", net: 500 },
+    { division: "Singlespeed Men 40-99", gender: "M", net: 400 },
+    { division: "Fat Bike Men 55-99", gender: "M", net: 400 },
+    { division: "Women 70-99", gender: "F", net: 400 },
+  ]);
+  assert.deepEqual(rows.map(({ age, ageMin, ageMax, menFinishers, womenFinishers }) =>
+    [age, ageMin, ageMax, menFinishers, womenFinishers]), [
+    [45, 45, 45, 0, 1],
+    [46, 45, 47, 0, 2],
+    [46, 46, 46, 2, 0],
+  ]);
+  assert.equal(rows[1].womenMedian, 1600);
+  assert.equal(rows[2].menMedian, 1100);
+});
+
+test("2026 age chart includes both genders from published division ranges", () => {
+  const rows = ageGenderFinishTimes(finishers);
+  assert.ok(rows.some((row) => row.menFinishers > 0 && row.ageMin === 46 && row.ageMax === 46));
+  assert.ok(rows.some((row) => row.womenFinishers > 0 && row.ageMin === 45 && row.ageMax === 47));
+  assert.ok(rows.every((row) => row.ageMax !== 99 || row.ageMin === row.ageMax));
+});
 
 test("race event selection keeps Slush Cup separate from Iceman results", () => {
   const parsed = {
@@ -666,7 +716,13 @@ test("division display labels are shared without changing division membership", 
   }
   assert.equal(divisionLabel(riders2025.find((r) => r.bib === 6247)), "Junior Women 9-14");
   assert.equal(divisionLabel({ division: "F Overall", raceGroup: "junior" }), "Junior Women Overall");
-  assert.equal(divisionLabel({ division: "F0914", raceGroup: "amateur" }), "F0914");
+  assert.equal(divisionLabel({ division: "M2527", raceGroup: "amateur" }), "Men 25-27");
+  assert.equal(divisionLabel({ division: "F7099", raceGroup: "amateur" }), "Women 70+");
+  assert.equal(divisionLabel({ division: "M75100", raceGroup: "amateur" }), "Men 75+");
+  assert.equal(divisionLabel({ division: "M5050", raceGroup: "amateur" }), "Men 50");
+  assert.equal(divisionLabel({ division: "M 19-44", raceGroup: "unclassified" }), "Men 19-44");
+  assert.equal(divisionLabel({ division: "Men 19-24", raceGroup: "amateur" }), "Men 19-24");
+  assert.equal(divisionLabel({ division: "M Fat Tire Male 40-49", raceGroup: "amateur" }), "M Fat Tire Male 40-49");
   assert.equal(divisionLabel({ raceGroup: "junior" }), "");
 });
 
@@ -914,12 +970,70 @@ test("index lists every year folder, newest first, with matching counts", () => 
   const years = dataIndex.years.map((y) => y.year);
   assert.deepEqual(years, [...years].sort((a, b) => b - a));
   for (const entry of dataIndex.years) {
+    const eventEntry = dataIndex.events.iceman.years.find((year) => year.year === entry.year);
+    assert.deepEqual(eventEntry, entry, `${entry.year} Iceman event index`);
     const yearData = parseIceman(entry.path);
     assert.equal(yearData.race.year, entry.year);
     assert.equal(yearData.riders.length, entry.riders);
     assert.equal(yearData.finishers.length, entry.finishers);
+    for (const [key, members] of [
+      ["men", yearData.finishers.filter((rider) => rider.gender === "M")],
+      ["women", yearData.finishers.filter((rider) => rider.gender === "F")],
+    ]) {
+      const times = members.map((rider) => rider.net).sort((a, b) => a - b);
+      const expectedFastest = times[0] ?? null;
+      assert.equal(entry[`${key}Fastest`], expectedFastest, `${entry.year} ${key} fastest`);
+      assert.equal(entry[`${key}Finishers`], times.length, `${entry.year} ${key} count`);
+      const winner = [...members].sort((a, b) => a.net - b.net)[0];
+      assert.equal(entry[`${key}WinnerSpeed`], winner?.avgSpeed ?? null,
+        `${entry.year} ${key} speed belongs to fastest finisher`);
+    }
   }
   assert.equal(josh.person, "josh-friend");
+});
+
+test("winner speeds use source values or published distance and time with only a 2020 gap", () => {
+  const year = (year) => dataIndex.years.find((entry) => entry.year === year);
+  assert.equal(year(2026).menWinnerSpeed, 20);
+  assert.equal(year(2025).menWinnerSpeed, 18.6);
+  assert.ok(Math.abs(year(2018).menWinnerSpeed - (47476 / 1609.344) / (5507 / 3600)) < 1e-10);
+  assert.ok(Math.abs(year(2018).womenWinnerSpeed - (47476 / 1609.344) / (6418 / 3600)) < 1e-10);
+  const missingYears = [];
+  for (let yearNumber = 2001; yearNumber <= 2026; yearNumber++) {
+    const entry = year(yearNumber);
+    if (!entry || !Number.isFinite(entry.menWinnerSpeed)
+        || !Number.isFinite(entry.womenWinnerSpeed) || !Number.isFinite(entry.courseDistance)) {
+      missingYears.push(yearNumber);
+    }
+  }
+  assert.deepEqual(missingYears, [2020]);
+  for (const entry of dataIndex.years) {
+    const data = parseIceman(entry.path);
+    for (const rider of data.riders) {
+      if (!rider.finished) assert.equal(rider.avgSpeed, null);
+      else assert.ok(rider.avgSpeed === null || Number.isFinite(rider.avgSpeed) && rider.avgSpeed > 0);
+    }
+    const winner = [...data.finishers].sort((a, b) => a.net - b.net)[0];
+    const implied = data.finishers.filter((r) => r.avgSpeed > 0).map((r) => r.avgSpeed * r.net / 3600);
+    const estimated = winner.courseDistance === null && implied.length > 0;
+    assert.equal(entry.courseDistanceEstimated, estimated);
+    if (estimated) {
+      const mean = implied.reduce((sum, miles) => sum + miles, 0) / implied.length;
+      assert.ok(Math.abs(entry.courseDistance - mean) < 1e-9);
+    } else {
+      assert.equal(entry.courseDistance, winner.courseDistance);
+    }
+  }
+});
+
+test("course distance includes published distances without speeds and flags rounded-speed estimates", () => {
+  const year = (year) => dataIndex.years.find((entry) => entry.year === year);
+  assert.ok(Math.abs(year(2025).courseDistance - 30.9) < 1e-10);
+  assert.equal(year(2025).courseDistanceEstimated, false);
+  assert.ok(Math.abs(year(2018).courseDistance - 47476 / 1609.344) < 1e-10);
+  assert.equal(year(2018).courseDistanceEstimated, false);
+  assert.ok(Math.abs(year(2026).courseDistance - 30.87) < 0.01);
+  assert.equal(year(2026).courseDistanceEstimated, true);
 });
 
 test("name variants require shared IDs rather than rider-specific aliases", () => {
@@ -1045,4 +1159,87 @@ test("missing starts do not create phantom passes", () => {
   const missing = { bib: 2, start: null, clock: null };
   assert.deepEqual(passCounts(rider, [rider, missing]), { passed: 0, passedBy: 0, net: 0 });
   assert.deepEqual(passCounts(missing, [rider, missing]), { passed: 0, passedBy: 0, net: 0 });
+});
+
+test("parseRace derives missing speeds from course distance and finish time", () => {
+  const fields = ["bib", "status", "net", "avgSpeed", "courseDistance", "raceEvent"];
+  const { riders } = parseRace({
+    race: { year: 2030 },
+    fields,
+    riders: [
+      [1, 1, 3600, 20, null, "iceman"],
+      [2, 2, 7200, 10, null, "iceman"],
+      [3, 3, 5400, null, null, "iceman"],
+      [4, 4, 3600, null, 12, "slush-cup"],
+      [5, "DNF", null, null, null, "iceman"],
+    ],
+  });
+  assert.deepEqual(riders.map((rider) => rider.speed), [20, 10, 20 * 3600 / 5400, 12, null]);
+});
+
+test("rider splits derive leg times and speeds, bridging missed checkpoints", () => {
+  const splits = {
+    courses: [{
+      checkpoints: [
+        { name: "A", miles: 8, location: "Alder Rd" },
+        { name: "B", miles: 16, location: null },
+        { name: "C", miles: 24, location: null },
+      ],
+      riders: { 7: [1800, null, 5400], 8: [1800, 4200, 5400] },
+    }],
+  };
+  const rider = { bib: 7, finished: true, net: 7200, courseDistance: 30 };
+  const { rows, estimated } = riderSplits(rider, splits);
+  assert.equal(estimated, false);
+  assert.deepEqual(rows.map((row) => [row.name, row.elapsed, row.leg, row.legMiles]), [
+    ["A", 1800, 1800, 8], ["B", null, null, null], ["C", 5400, 3600, 16], ["Finish", 7200, 1800, 6],
+  ]);
+  assert.deepEqual(rows.map((row) => row.speed), [16, null, 16, 12]);
+  assert.equal(rows[0].location, "Alder Rd");
+  assert.equal(riderSplits({ bib: 9, finished: true, net: 100 }, splits), null);
+  assert.equal(riderSplits(rider, null), null);
+});
+
+test("rider splits omit speeds without checkpoint distances and skip finish for non-finishers", () => {
+  const splits = {
+    courses: [{ checkpoints: [{ name: "Dockery", miles: null, location: null }], riders: { 1: [1500] } }],
+  };
+  const finisher = riderSplits({ bib: 1, finished: true, net: 5000, courseDistance: 30 }, splits).rows;
+  assert.deepEqual(finisher.map((row) => [row.leg, row.speed]), [[1500, null], [3500, null]]);
+  const dnf = riderSplits({ bib: 1, finished: false, net: null }, splits).rows;
+  assert.deepEqual(dnf.map((row) => row.name), ["Dockery"]);
+});
+
+test("published split files line up with every year's riders and finish times", () => {
+  const entries = dataIndex.events.iceman.years.filter((entry) => entry.splits);
+  assert.ok(entries.some((entry) => entry.year === 2026) && entries.some((entry) => entry.year === 2025));
+  for (const entry of entries) {
+    const year = parseRace(readJson(entry.path));
+    const splits = readJson(entry.splits);
+    const byBib = new Map(year.riders.map((rider) => [String(rider.bib), rider]));
+    for (const course of splits.courses) {
+      for (const [bib, times] of Object.entries(course.riders)) {
+        const rider = byBib.get(bib);
+        assert.ok(rider, `${entry.year}: bib ${bib} is not in the results`);
+        assert.equal(times.length, course.checkpoints.length);
+        const known = times.filter((time) => time !== null);
+        assert.deepEqual(known, [...known].sort((a, b) => a - b), `${entry.year}: bib ${bib}`);
+      }
+    }
+  }
+});
+
+test("2026 splits use GPS-estimated distances scaled to the course; 2025 uses published ones", () => {
+  const { rows: rows2026, estimated } = riderSplits(josh, readJson("2026/splits.json"));
+  assert.equal(estimated, true);
+  assert.deepEqual(rows2026.map((row) => row.name), ["Dockery", "Williamsburg", "Ice Station Zebra", "Finish"]);
+  assert.deepEqual(rows2026.map((row) => row.miles), [...rows2026.map((row) => row.miles)].sort((a, b) => a - b));
+  assert.ok(Math.abs(rows2026.at(-1).miles - 30.9) < 0.1);
+  assert.ok(rows2026.every((row) => row.speed > 10 && row.speed < 25));
+  const winner = riders2025.find((rider) => rider.bib === 311);
+  const result2025 = riderSplits(winner, readJson("2025/splits.json"));
+  assert.equal(result2025.estimated, false);
+  assert.deepEqual(result2025.rows.map((row) => row.location), ["Dockery Rd", "North Broomhead Rd", null]);
+  assert.equal(result2025.rows.at(-1).elapsed, winner.net);
+  assert.ok(result2025.rows.every((row) => row.speed > 10 && row.speed < 25));
 });

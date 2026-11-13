@@ -1,10 +1,10 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
 import {
-  clockTime, comparisonRank, divisionLabel, duration, estimateNextWave, findRiders, findYearRiders,
-  groupsFor, hm, hms, kde, ordinal, parseRace, passCounts, passDistribution, podium, riderHistory, waveDistributions,
+  ageGenderFinishTimes, clockTime, comparisonRank, divisionLabel, duration, estimateNextWave, findRiders, findYearRiders,
+  groupsFor, hm, hms, kde, ordinal, parseRace, passCounts, passDistribution, podium, riderHistory, riderSplits, waveDistributions,
   winnerGaps, raceRecap, selectRaceEvent,
-} from "./stats.js?v=9";
+} from "./stats.js?v=19";
 
 const AWARDS = {
   1: { name: "Gold", color: "#c9a227" },
@@ -19,10 +19,14 @@ const COLORS = {
   blue: "#8295a8", accent: "#1476c8", slower: "#328c79", red: "#ca453d", ink: "#203346",
   muted: "#657584", grid: "#e8edf0", band: "#f6f8fa", range: "#acbac5",
 };
+let historyMetric = "time";
+let historyFinishes = [];
 const fmt = d3.format(",");
 const $ = (id) => document.getElementById(id);
 
-const index = await (await fetch("data/index.json")).json();
+const DATA_VERSION = 5;
+const dataUrl = (path) => `data/${path}?v=${DATA_VERSION}`;
+const index = await (await fetch(`data/index.json?v=${DATA_VERSION}`)).json();
 const urlParams = new URLSearchParams(location.search);
 const requestedEvent = urlParams.get("race");
 const raceKey = index.events[requestedEvent] ? requestedEvent : "iceman";
@@ -53,38 +57,54 @@ function raceUrl(year, event = raceKey, params = {}) {
   return `?${query}`;
 }
 const data = selectRaceEvent(
-  parseRace(await (await fetch(`data/${yearEntry.path}`)).json()), raceKey, eventInfo.name,
+  parseRace(await (await fetch(dataUrl(yearEntry.path))).json()), raceKey, eventInfo.name,
 );
 const raceCache = new Map([[data.race.year, Promise.resolve(data)]]);
 const passDistributions = new Map();
+const splitsCache = new Map();
+let splitsRequest = 0;
 let historyRequest = 0;
+async function fetchYearJson(entry, attempts = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const response = await fetch(dataUrl(entry.path));
+      if (!response.ok) throw new Error(`${entry.year}: HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+    }
+  }
+}
+
 function loadRace(entry) {
   if (!raceCache.has(entry.year)) {
-    const request = fetch(`data/${entry.path}`).then(async (response) => {
-      if (!response.ok) throw new Error(`${entry.year}: HTTP ${response.status}`);
-      return selectRaceEvent(parseRace(await response.json()), raceKey, eventInfo.name);
-    }).catch((error) => {
-      raceCache.delete(entry.year);
-      throw error;
-    });
+    const request = fetchYearJson(entry)
+      .then((json) => selectRaceEvent(parseRace(json), raceKey, eventInfo.name))
+      .catch((error) => {
+        raceCache.delete(entry.year);
+        throw error;
+      });
     raceCache.set(entry.year, request);
   }
   return raceCache.get(entry.year);
 }
 const hasBibData = data.riders.some((r) => Number.isInteger(r.bib));
 const raceHistory = await Promise.all(eventYears
-  .filter((entry) => entry.year <= data.race.year && entry.year >= data.race.year - 4)
+  .filter((entry) => entry.year <= data.race.year && entry.year >= data.race.year - 5)
   .map(loadRace));
 const raceTitle = `${data.race.name} ${data.race.year}`;
 $("race-title").textContent = raceTitle;
 document.title = `${raceTitle} results`;
 renderRaceRecap(data);
 drawEntriesHistory();
+drawCoursePaceHistory();
+drawCourseDistanceHistory();
+drawAgeGenderFinishTimes(data);
 const hasWaveData = data.finishers.some((r) => Number.isInteger(r.wave));
 const hasStartData = data.finishers.some((r) => Number.isFinite(r.start) && Number.isInteger(r.wave));
 let waves = [];
 let waveResizeObserver;
-const overallMinutes = data.finishers.map((r) => r.net / 60).sort((a, b) => a - b);
 $("source").href = data.race.resultsUrl;
 $("source").textContent = data.race.sourceName;
 $("source-note").textContent = hasStartData
@@ -101,7 +121,11 @@ $("event").addEventListener("change", () => {
 });
 $("lookup").addEventListener("submit", (event) => {
   event.preventDefault();
-  lookup($("query").value);
+  if ($("query").value.trim()) lookup($("query").value);
+  else resetLookup();
+});
+$("query").addEventListener("input", () => {
+  if (!$("query").value.trim()) resetLookup();
 });
 $("year").addEventListener("change", async () => {
   const entry = eventYears.find((year) => year.year === Number($("year").value));
@@ -113,7 +137,7 @@ $("year").addEventListener("change", async () => {
   setMessage(`Loading ${entry.year} results...`);
   try {
     if (query) {
-      const response = await fetch(`data/${entry.path}`);
+      const response = await fetch(dataUrl(entry.path));
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const nextData = parseRace(await response.json());
       const matches = findYearRiders(data.riders, query, nextData.riders);
@@ -145,6 +169,11 @@ $("copy-link").addEventListener("click", async () => {
   await navigator.clipboard.writeText(location.href);
   $("copy-link").textContent = "Link copied";
   setTimeout(() => { $("copy-link").textContent = "Copy link"; }, 1600);
+});
+$("history-metric-toggle").addEventListener("change", (event) => {
+  if (event.target.name !== "history-metric") return;
+  historyMetric = event.target.value;
+  renderHistoryCharts();
 });
 loadFromUrl();
 
@@ -181,9 +210,15 @@ function renderRaceRecap(raceData) {
 function drawEntriesHistory() {
   const entries = [...eventYears].sort((a, b) => a.year - b.year);
   const years = d3.range(entries[0].year, entries.at(-1).year + 1);
-  const width = 1000;
+  const container = $("entries-history-chart");
+  let lastWidth = 0;
+  const draw = () => {
+  const width = Math.round(container.clientWidth);
+  if (!width || width === lastWidth) return;
+  lastWidth = width;
+  container.replaceChildren();
   const height = 300;
-  const margin = { top: 28, right: 12, bottom: 46, left: 54 };
+  const margin = { top: 28, right: 12, bottom: 46, left: 48 };
   const x = d3.scaleBand(years, [margin.left, width - margin.right]).padding(0.25);
   const y = d3.scaleLinear([0, d3.max(entries, (entry) => entry.riders)],
     [height - margin.bottom, margin.top]).nice();
@@ -199,8 +234,10 @@ function drawEntriesHistory() {
     .call(d3.axisLeft(y).ticks(5).tickFormat(fmt).tickPadding(8));
   svg.append("g").attr("class", "axis")
     .attr("transform", `translate(0,${height - margin.bottom})`)
-    .call(d3.axisBottom(x).tickSize(0).tickPadding(10))
-    .selectAll("text").attr("transform", "rotate(-45)").attr("text-anchor", "end");
+    .call(d3.axisBottom(x).tickValues(years.filter((_, index) =>
+      index % Math.max(1, Math.ceil(years.length
+        / Math.max(2, Math.floor((width - margin.left - margin.right) / 90)))) === 0))
+      .tickSize(0).tickPadding(10));
   const bars = svg.append("g").selectAll("a").data(entries).join("a")
     .attr("href", (entry) => raceUrl(entry.year))
     .attr("aria-label", (entry) => `${entry.year}: ${fmt(entry.riders)} entries, ${
@@ -222,7 +259,364 @@ function drawEntriesHistory() {
     .attr("x", (entry) => x(entry.year) + x.bandwidth() / 2)
     .attr("y", (entry) => y(entry.riders) - 7)
     .attr("text-anchor", "middle").attr("font-size", 10).attr("fill", COLORS.ink)
-    .text((entry) => fmt(entry.riders));
+    .text((entry) => width >= 760 ? fmt(entry.riders) : "");
+  };
+  new ResizeObserver(draw).observe(container);
+  draw();
+}
+
+function addChartTooltip(container, svg, groups, plot) {
+  const visible = groups.filter((group) => group.rows.length);
+  if (!visible.length) return;
+  // One viewport-fixed tooltip shared by all charts, so it never changes page layout or scroll size.
+  let tooltip = document.getElementById("chart-tooltip");
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.id = "chart-tooltip";
+    tooltip.className = "chart-tooltip";
+    tooltip.hidden = true;
+    document.body.append(tooltip);
+  }
+  const marks = svg.append("g").attr("class", "hover-marks").attr("pointer-events", "none").attr("display", "none");
+  const guide = marks.append("line").attr("class", "hover-guide")
+    .attr("y1", plot.top).attr("y2", plot.bottom);
+  const dots = marks.append("g");
+  svg.append("rect").attr("class", "hover-overlay")
+    .attr("x", plot.left).attr("y", plot.top)
+    .attr("width", plot.right - plot.left).attr("height", plot.bottom - plot.top)
+    .attr("fill", "none").attr("pointer-events", "all")
+    .on("pointermove", (event) => {
+      const [px] = d3.pointer(event, svg.node());
+      const group = d3.least(visible, (candidate) => Math.abs(candidate.x - px));
+      guide.attr("x1", group.x).attr("x2", group.x);
+      dots.selectAll("circle").data(group.rows).join("circle")
+        .attr("cx", group.x).attr("cy", (row) => row.y).attr("r", 6)
+        .attr("fill", "none").attr("stroke", (row) => row.color).attr("stroke-width", 2);
+      marks.attr("display", null);
+      tooltip.replaceChildren();
+      const header = document.createElement("strong");
+      header.textContent = group.header;
+      tooltip.append(header);
+      for (const row of group.rows) {
+        const line = document.createElement("div");
+        const swatch = document.createElement("span");
+        swatch.className = "chart-tooltip-swatch";
+        swatch.style.background = row.color;
+        line.append(swatch, `${row.label ? `${row.label}: ` : ""}${row.value}`);
+        if (row.detail) {
+          const detail = document.createElement("span");
+          detail.className = "chart-tooltip-detail";
+          detail.textContent = ` ${row.detail}`;
+          line.append(detail);
+        }
+        tooltip.append(line);
+      }
+      tooltip.hidden = false;
+      const gap = 14;
+      const flip = event.clientX + gap + tooltip.offsetWidth > window.innerWidth - 8;
+      const left = flip ? event.clientX - gap - tooltip.offsetWidth : event.clientX + gap;
+      const top = Math.min(Math.max(8, event.clientY - tooltip.offsetHeight / 2),
+        window.innerHeight - tooltip.offsetHeight - 8);
+      tooltip.style.left = `${Math.max(8, left)}px`;
+      tooltip.style.top = `${top}px`;
+    })
+    .on("pointerleave", () => {
+      marks.attr("display", "none");
+      tooltip.hidden = true;
+    });
+}
+
+function drawCoursePaceHistory() {
+  const section = $("course-pace-history");
+  if (raceKey !== "iceman") {
+    section.hidden = true;
+    return;
+  }
+  const entries = [...index.events.iceman.years].sort((a, b) => a.year - b.year);
+  const series = [
+    { key: "menFastest", speedKey: "menWinnerSpeed", count: "menFinishers", label: "Men's winner", color: COLORS.accent },
+    { key: "womenFastest", speedKey: "womenWinnerSpeed", count: "womenFinishers", label: "Women's winner", color: COLORS.red },
+  ];
+  const available = entries.flatMap((entry) => series
+    .map(({ key }) => entry[key]).filter(Number.isFinite));
+  if (!available.length) {
+    section.hidden = true;
+    return;
+  }
+  const container = $("course-pace-history-chart");
+  let metric = "speed";
+  let lastWidth = 0;
+  const draw = () => {
+    const width = Math.round(container.clientWidth);
+    if (!width || width === lastWidth) return;
+    lastWidth = width;
+    container.replaceChildren();
+    const speed = metric === "speed";
+    const valueFor = (entry, item) => entry[speed ? item.speedKey : item.key];
+    const values = entries.flatMap((entry) => series.map((item) => valueFor(entry, item)))
+      .filter(Number.isFinite);
+    const formatValue = speed ? (value) => `${value.toFixed(1)} mph` : hms;
+    $("course-pace-history-title").textContent = speed
+      ? "Winners' average speed by year" : "Winning finish times by year";
+    if (!values.length) {
+      const message = document.createElement("p");
+      message.textContent = "No published winner speeds available. Select Time to see winning finish times.";
+      container.append(message);
+      return;
+    }
+
+    const height = 360;
+    const margin = { top: 24, right: 20, bottom: 56, left: 76 };
+    const x = d3.scaleLinear(
+      [entries[0].year, entries.at(-1).year],
+      [margin.left, width - margin.right],
+    );
+    const minValue = Math.min(...values), maxValue = Math.max(...values);
+    const padding = Math.max(speed ? 0.5 : 60, (maxValue - minValue) * 0.08);
+    const y = d3.scaleLinear([Math.max(0, minValue - padding), maxValue + padding],
+      [height - margin.bottom, margin.top]).nice();
+    const svg = d3.select(container).append("svg")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("role", "img")
+      .attr("aria-label", `Men's and women's ${speed ? "winning average speeds" : "winning finish times"} by year, ${
+        entries[0].year} to ${entries.at(-1).year}. ${speed ? "Higher" : "Lower"} is faster.`);
+    svg.append("g").selectAll("line").data(y.ticks(5)).join("line")
+      .attr("class", "gridline")
+      .attr("x1", margin.left).attr("x2", width - margin.right)
+      .attr("y1", (time) => y(time)).attr("y2", (time) => y(time));
+    svg.append("g").attr("class", "axis").attr("transform", `translate(0,${height - margin.bottom})`)
+      .call(d3.axisBottom(x)
+        .ticks(Math.max(2, Math.floor((width - margin.left - margin.right) / 90)))
+        .tickFormat(d3.format("d")));
+    svg.append("g").attr("class", "axis").attr("transform", `translate(${margin.left},0)`)
+      .call(d3.axisLeft(y).ticks(5).tickFormat(speed ? d3.format(".1f") : hms));
+    for (const item of series) {
+      const dataKey = d3.range(entries[0].year, entries.at(-1).year + 1).map((year) => {
+        const entry = entries.find((entry) => entry.year === year);
+        return entry ? { ...entry, value: valueFor(entry, item) } : { year, value: null };
+      });
+      svg.append("path")
+        .datum(dataKey)
+        .attr("class", `course-pace-line ${item.key}`)
+        .attr("fill", "none")
+        .attr("stroke", item.color)
+        .attr("stroke-width", 2.5)
+        .attr("d", d3.line().defined((entry) => Number.isFinite(entry.value))
+          .x((entry) => x(entry.year)).y((entry) => y(entry.value)));
+      svg.append("g").selectAll("circle")
+        .data(dataKey.filter((entry) => Number.isFinite(entry.value)))
+        .join("circle")
+        .attr("class", "course-pace-point")
+        .attr("cx", (entry) => x(entry.year))
+        .attr("cy", (entry) => y(entry.value))
+        .attr("r", 3.5)
+        .attr("fill", item.color);
+    }
+    svg.append("text").attr("class", "course-pace-axis-label")
+      .attr("transform", `translate(16,${(margin.top + height - margin.bottom) / 2}) rotate(-90)`)
+      .attr("text-anchor", "middle")
+      .text(speed ? "Average speed, mph (higher = faster)" : "Winning finish time (lower = faster)");
+    addChartTooltip(container, svg, entries.map((entry) => ({
+      x: x(entry.year),
+      header: String(entry.year),
+      rows: series.filter((item) => Number.isFinite(valueFor(entry, item))).map((item) => ({
+        color: item.color, label: item.label, y: y(valueFor(entry, item)),
+        value: formatValue(valueFor(entry, item)),
+        detail: `(${fmt(entry[item.count])} finishers)`,
+      })),
+    })), { left: margin.left, right: width - margin.right, top: margin.top, bottom: height - margin.bottom });
+  };
+  for (const input of section.querySelectorAll('input[name="course-pace-metric"]')) {
+    input.addEventListener("change", () => {
+      metric = input.value;
+      lastWidth = 0;
+      draw();
+    });
+  }
+  new ResizeObserver(draw).observe(container);
+  draw();
+}
+
+function drawCourseDistanceHistory() {
+  const section = $("course-distance-history");
+  if (raceKey !== "iceman") {
+    section.hidden = true;
+    return;
+  }
+  const years = [...eventYears].sort((a, b) => a.year - b.year);
+  const entries = d3.range(years[0].year, years.at(-1).year + 1).map((year) =>
+    years.find((entry) => entry.year === year) ?? { year, courseDistance: null });
+  const points = entries.filter((entry) => Number.isFinite(entry.courseDistance));
+  if (!points.length) {
+    section.hidden = true;
+    return;
+  }
+  const container = $("course-distance-history-chart");
+  let lastWidth = 0;
+  const draw = () => {
+    const width = Math.round(container.clientWidth);
+    if (!width || width === lastWidth) return;
+    lastWidth = width;
+    container.replaceChildren();
+    const height = 260;
+    const margin = { top: 20, right: 20, bottom: 40, left: 76 };
+    const x = d3.scaleLinear([entries[0].year, entries.at(-1).year],
+      [margin.left, width - margin.right]);
+    const distances = points.map((entry) => entry.courseDistance);
+    const minDistance = Math.min(...distances), maxDistance = Math.max(...distances);
+    const padding = Math.max(0.5, (maxDistance - minDistance) * 0.1);
+    const y = d3.scaleLinear([Math.max(0, minDistance - padding), maxDistance + padding],
+      [height - margin.bottom, margin.top]).nice();
+    const svg = d3.select(container).append("svg")
+      .attr("viewBox", `0 0 ${width} ${height}`).attr("role", "img")
+      .attr("aria-label", `Course distance in miles by year, ${entries[0].year} to ${
+        entries.at(-1).year}. Hollow points indicate estimates from rounded finisher speeds.`);
+    svg.append("g").selectAll("line").data(y.ticks(5)).join("line")
+      .attr("class", "gridline")
+      .attr("x1", margin.left).attr("x2", width - margin.right)
+      .attr("y1", (distance) => y(distance)).attr("y2", (distance) => y(distance));
+    svg.append("g").attr("class", "axis").attr("transform", `translate(0,${height - margin.bottom})`)
+      .call(d3.axisBottom(x)
+        .ticks(Math.max(2, Math.floor((width - margin.left - margin.right) / 90)))
+        .tickFormat(d3.format("d")));
+    svg.append("g").attr("class", "axis").attr("transform", `translate(${margin.left},0)`)
+      .call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".1f")));
+    svg.append("path").datum(entries).attr("class", "course-distance-line")
+      .attr("fill", "none").attr("stroke", COLORS.accent).attr("stroke-width", 2.5)
+      .attr("d", d3.line().defined((entry) => Number.isFinite(entry.courseDistance))
+        .x((entry) => x(entry.year)).y((entry) => y(entry.courseDistance)));
+    svg.append("g").selectAll("circle").data(points).join("circle")
+      .attr("cx", (entry) => x(entry.year)).attr("cy", (entry) => y(entry.courseDistance))
+      .attr("r", 4).attr("stroke", COLORS.accent).attr("stroke-width", 2)
+      .attr("fill", (entry) => entry.courseDistanceEstimated ? "#fff" : COLORS.accent);
+    addChartTooltip(container, svg, points.map((entry) => ({
+      x: x(entry.year),
+      header: String(entry.year),
+      rows: [{
+        color: COLORS.accent, label: "", y: y(entry.courseDistance),
+        value: `${entry.courseDistance.toFixed(1)} miles`,
+        detail: entry.courseDistanceEstimated ? "(approximate, averaged from finishers' rounded speeds and times)" : "(published distance)",
+      }],
+    })), { left: margin.left, right: width - margin.right, top: margin.top, bottom: height - margin.bottom });
+    svg.append("text").attr("class", "course-pace-axis-label")
+      .attr("transform", `translate(16,${(margin.top + height - margin.bottom) / 2}) rotate(-90)`)
+      .attr("text-anchor", "middle").text("Course distance (miles)");
+  };
+  new ResizeObserver(draw).observe(container);
+  draw();
+}
+
+function drawAgeGenderFinishTimes(raceData) {
+  const section = $("age-gender-finish-times");
+  const container = $("age-gender-finish-times-chart");
+  const emptyMessage = $("age-gender-finish-times-empty");
+  if (raceKey !== "iceman") {
+    section.hidden = true;
+    return;
+  }
+  const ages = ageGenderFinishTimes(raceData.finishers);
+  const series = [
+    { key: "menMedian", speedKey: "menMedianSpeed", count: "menFinishers", label: "Men", color: COLORS.accent },
+    { key: "womenMedian", speedKey: "womenMedianSpeed", count: "womenFinishers", label: "Women", color: COLORS.red },
+  ];
+  if (!ages.some((entry) => series.some(({ key }) => Number.isFinite(entry[key])))) {
+    container.hidden = true;
+    emptyMessage.textContent = `No finishers have a published age or bounded age division and gender for ${raceData.race.year}.`;
+    emptyMessage.hidden = false;
+    return;
+  }
+  container.hidden = false;
+  emptyMessage.hidden = true;
+  let lastWidth = 0;
+  let lastMetric = null;
+  const draw = () => {
+    const width = Math.round(container.clientWidth);
+    const speed = document.querySelector('input[name="course-pace-metric"]:checked')?.value === "speed";
+    if (!width || (width === lastWidth && speed === lastMetric)) return;
+    lastWidth = width;
+    lastMetric = speed;
+    container.replaceChildren();
+    const valueKey = (item) => speed ? item.speedKey : item.key;
+    const values = ages.flatMap((entry) => series.map((item) => entry[valueKey(item)]))
+      .filter(Number.isFinite);
+    $("age-gender-finish-times-title").textContent = speed
+      ? "Median speed by age category" : "Median finish time by age category";
+    if (!values.length) {
+      const message = document.createElement("p");
+      message.textContent = "No speed data available. Select Time to see median finish times.";
+      container.append(message);
+      return;
+    }
+
+    const height = 360;
+    const margin = { top: 24, right: 20, bottom: 56, left: 76 };
+    const [minAge, maxAge] = d3.extent(ages, (entry) => entry.age);
+    const x = d3.scaleLinear(
+      minAge === maxAge ? [minAge - 1, maxAge + 1] : [minAge, maxAge],
+      [margin.left, width - margin.right],
+    );
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    const padding = Math.max(speed ? 0.5 : 60, (maxValue - minValue) * 0.08);
+    const y = d3.scaleLinear([Math.max(0, minValue - padding), maxValue + padding],
+      [height - margin.bottom, margin.top]).nice();
+    const svg = d3.select(container).append("svg")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("role", "img")
+      .attr("aria-label", `Median ${speed ? "speeds" : "finish times"} by age and gender for ${
+        raceData.race.year}. ${speed ? "Higher" : "Lower"} is faster. Uses published ages or age divisions plotted at their midpoints.`);
+    svg.append("g").selectAll("line").data(y.ticks(5)).join("line")
+      .attr("class", "gridline")
+      .attr("x1", margin.left).attr("x2", width - margin.right)
+      .attr("y1", (time) => y(time)).attr("y2", (time) => y(time));
+    svg.append("g").attr("class", "axis").attr("transform", `translate(0,${height - margin.bottom})`)
+      .call(d3.axisBottom(x)
+        .ticks(Math.max(2, Math.floor((width - margin.left - margin.right) / 40)))
+        .tickFormat(d3.format("d")));
+    svg.append("g").attr("class", "axis").attr("transform", `translate(${margin.left},0)`)
+      .call(d3.axisLeft(y).tickFormat(speed ? d3.format(".1f") : hms));
+    for (const item of series) {
+      const key = valueKey(item);
+      const formatValue = speed ? (value) => `${value.toFixed(1)} mph` : hms;
+      svg.append("path")
+        .datum(ages.filter((entry) => Number.isFinite(entry[key])))
+        .attr("class", `age-gender-line ${item.key}`)
+        .attr("fill", "none")
+        .attr("stroke", item.color)
+        .attr("stroke-width", 2.5)
+        .attr("d", d3.line().defined((entry) => Number.isFinite(entry[key]))
+          .x((entry) => x(entry.age)).y((entry) => y(entry[key])));
+      svg.append("g").selectAll("circle")
+        .data(ages.filter((entry) => Number.isFinite(entry[key])))
+        .join("circle")
+        .attr("class", "age-gender-point")
+        .attr("cx", (entry) => x(entry.age))
+        .attr("cy", (entry) => y(entry[key]))
+        .attr("r", 3.5)
+        .attr("fill", item.color);
+    }
+    svg.append("text").attr("class", "course-pace-axis-label")
+      .attr("x", (margin.left + width - margin.right) / 2)
+      .attr("y", height - 8).attr("text-anchor", "middle").text("Age");
+    svg.append("text").attr("class", "course-pace-axis-label")
+      .attr("transform", `translate(16,${(margin.top + height - margin.bottom) / 2}) rotate(-90)`)
+      .attr("text-anchor", "middle")
+      .text(speed ? "Median speed, mph (higher = faster)" : "Median finish time");
+    addChartTooltip(container, svg, ages.map((entry) => ({
+      x: x(entry.age),
+      header: `Age ${entry.ageMin === entry.ageMax ? entry.ageMin : `${entry.ageMin}-${entry.ageMax}`}`,
+      rows: series.filter((item) => Number.isFinite(entry[valueKey(item)])).map((item) => ({
+        color: item.color, label: item.label, y: y(entry[valueKey(item)]),
+        value: speed ? `${entry[valueKey(item)].toFixed(1)} mph` : hms(entry[valueKey(item)]),
+        detail: `(${fmt(entry[item.count])} finishers)`,
+      })),
+    })), { left: margin.left, right: width - margin.right, top: margin.top, bottom: height - margin.bottom });
+  };
+  for (const input of document.querySelectorAll('input[name="course-pace-metric"]')) {
+    input.addEventListener("change", draw);
+  }
+  new ResizeObserver(draw).observe(container);
+  draw();
 }
 
 function loadFromUrl() {
@@ -243,8 +637,15 @@ function setUrlRider(rider, replace = false) {
   else window.history.pushState(null, "", url);
 }
 
+function resetLookup() {
+  const url = raceUrl(data.race.year, raceKey);
+  if (url !== location.search) window.history.pushState(null, "", url);
+  clearResult();
+}
+
 function clearResult() {
   historyRequest++;
+  splitsRequest++;
   $("year-recap").hidden = false;
   $("report").hidden = true;
   $("matches").hidden = true;
@@ -303,6 +704,61 @@ function lookup(query, push = true) {
   show(rider);
 }
 
+function loadSplits(entry) {
+  if (!entry.splits) return Promise.resolve(null);
+  if (!splitsCache.has(entry.splits)) {
+    const request = fetch(dataUrl(entry.splits)).then((response) => {
+      if (!response.ok) throw new Error(`Could not load ${entry.splits}`);
+      return response.json();
+    });
+    request.catch(() => splitsCache.delete(entry.splits));
+    splitsCache.set(entry.splits, request);
+  }
+  return splitsCache.get(entry.splits);
+}
+
+async function renderSplits(rider) {
+  const request = ++splitsRequest;
+  $("rider-splits").hidden = true;
+  $("splits-rows").replaceChildren();
+  let result = null;
+  try {
+    result = riderSplits(rider, await loadSplits(yearEntry));
+  } catch (error) {
+    console.error("Could not load checkpoint splits", error);
+  }
+  if (request !== splitsRequest || !result) return;
+  const { rows, estimated } = result;
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    const name = document.createElement("th");
+    name.scope = "row";
+    name.textContent = [row.location ?? row.name, Number.isFinite(row.miles) ? `${estimated ? "~" : ""}${row.miles.toFixed(1)} mi` : ""]
+      .filter(Boolean).join(" · ");
+    tr.append(name);
+    for (const value of [
+      row.elapsed === null ? "—" : hms(row.elapsed),
+      row.leg === null ? "—" : hms(row.leg),
+      row.speed === null ? "—" : `${row.speed.toFixed(1)} mph`,
+    ]) {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      tr.append(cell);
+    }
+    $("splits-rows").append(tr);
+  }
+  $("rider-splits").hidden = false;
+}
+
+function finishNote(rider) {
+  return Number.isFinite(rider.speed) && rider.speed > 0
+    ? `${rider.speed.toFixed(1)} mph avg · official finish time` : "official finish time";
+}
+
+function capitalize(value) {
+  return value ? value[0].toUpperCase() + value.slice(1) : value;
+}
+
 function show(rider) {
   setMessage("");
   $("rider-name").textContent = rider.name;
@@ -310,7 +766,7 @@ function show(rider) {
   $("rider-chips").replaceChildren(
     chip("Bib", rider.bib ?? "Not listed"),
     chip("Division", divisionLabel(rider) || "None listed"),
-    chip("Field", rider.raceGroup),
+    chip("Field", capitalize(rider.raceGroup)),
   );
   waves = waveDistributions(rider, data.finishers, data.race);
   const hasRiderWave = Number.isFinite(rider.start) && Number.isFinite(rider.clock)
@@ -321,6 +777,7 @@ function show(rider) {
   $("report").hidden = false;
   $("details").hidden = !rider.finished;
   document.title = `${rider.name} — ${raceTitle}`;
+  renderSplits(rider);
   renderHistory(rider);
   if (!rider.finished) {
     $("wave-estimate").hidden = true;
@@ -338,8 +795,8 @@ function show(rider) {
   if (!hasRiderWave) {
     $("wave-estimate").hidden = true;
     renderFacts([
-      { label: "Finish time", value: hms(rider.net), note: "official finish time", primary: true },
-      { label: `${rider.raceGroup} place`, value: ordinal(comparisonRank(rider, data.finishers)),
+      { label: "Finish time", value: hms(rider.net), note: finishNote(rider), primary: true },
+      { label: `${capitalize(rider.raceGroup)} place`, value: ordinal(comparisonRank(rider, data.finishers)),
         note: `published overall: ${ordinal(rider.status)}` },
       podiumFact(rider),
     ]);
@@ -349,7 +806,7 @@ function show(rider) {
   }
   renderWaveEstimate(rider);
   renderFacts([
-    { label: "Finish time", value: hms(rider.net), note: "official finish time", primary: true },
+    { label: "Finish time", value: hms(rider.net), note: finishNote(rider), primary: true },
     podiumFact(rider),
     { label: "Start", value: clockTime(rider.start), note: `wave ${rider.wave}` },
     { label: "Finished at", value: hms(rider.clock), note: "time of day" },
@@ -456,6 +913,9 @@ async function renderHistory(rider) {
   $("history-message").textContent = "Loading results across all years...";
   $("history-message").classList.remove("error");
   $("history-charts").replaceChildren();
+  historyFinishes = [];
+  $("history-speed-option").disabled = true;
+  $("history-metric-toggle").hidden = true;
   $("history-table").hidden = true;
   $("history-rows").replaceChildren();
   try {
@@ -464,12 +924,21 @@ async function renderHistory(rider) {
     const { results, ambiguousYears } = riderHistory(rider, history);
     const historyByYear = new Map(history.map((year) => [year.race.year, year]));
     const finishes = results.filter((result) => result.net !== null);
+    historyFinishes = finishes;
     const message = [
       `${results.length} matched year${results.length === 1 ? "" : "s"}`,
-      finishes.length < 2 ? "At least two finishes are needed to show a trend." : "",
+      results.length > 1 && finishes.length < 2 ? "At least two finishes are needed to show a trend." : "",
       ambiguousYears.length ? `Duplicate names: ${ambiguousYears.join(", ")} omitted.` : "",
     ].filter(Boolean).join(" ");
     $("history-message").textContent = message;
+    const hasSpeedTrend = historyFinishes.filter((result) =>
+      Number.isFinite(result.rider.speed) && result.rider.speed > 0).length >= 2;
+    $("history-speed-option").disabled = !hasSpeedTrend;
+    $("history-metric-toggle").hidden = results.length < 2;
+    if (!hasSpeedTrend && historyMetric === "speed") {
+      historyMetric = "time";
+      $('input[name="history-metric"][value="time"]').checked = true;
+    }
     for (const result of results) {
       const row = document.createElement("tr");
       if (result.year === data.race.year) row.className = "selected-year";
@@ -488,7 +957,11 @@ async function renderHistory(rider) {
         row.style.setProperty("--podium-color", AWARDS[divisionPodium.place].color);
         const mark = document.createElement("span");
         mark.className = "podium-mark";
-        mark.textContent = `${ordinal(divisionPodium.place)} podium`;
+        const icon = trophy(AWARDS[divisionPodium.place].color, "");
+        icon.setAttribute("aria-hidden", "true");
+        const place = document.createElement("span");
+        place.textContent = ordinal(divisionPodium.place);
+        mark.append(icon, place);
         mark.title = `${ordinal(divisionPodium.place)} place in ${divisionLabel(result.rider)}`;
         yearCell.append(" ", mark);
       }
@@ -498,9 +971,11 @@ async function renderHistory(rider) {
       row.append(waveCell);
       const change = result.timeChange;
       for (const value of [
-        result.net === null ? String(result.rider.status) : hms(result.net),
+        result.net === null ? String(result.rider.status)
+          : `${hms(result.net)}${Number.isFinite(result.rider.speed)
+            ? ` · ${result.rider.speed.toFixed(1)} mph` : ""}`,
         change === null ? "—" : change === 0 ? "No change" : `${change < 0 ? "−" : "+"}${duration(Math.abs(change))}`,
-        result.net === null ? "—" : `${fmt(result.rank)} / ${fmt(result.fieldSize)} (${result.rider.raceGroup ?? "amateur"})`,
+        result.net === null ? "—" : `${fmt(result.rank)} / ${fmt(result.fieldSize)} (${capitalize(result.rider.raceGroup ?? "amateur")})`,
         result.aheadPct === null ? "—" : `${result.aheadPct.toFixed(1)}%`,
       ]) {
         const cell = document.createElement("td");
@@ -511,15 +986,7 @@ async function renderHistory(rider) {
     }
     $("history-table").hidden = results.length === 0;
     if (finishes.length >= 2) {
-      const yearDomain = d3.extent(finishes, (result) => result.year);
-      drawHistoryChart(finishes, {
-        title: "Finish time", note: "Lower is faster", key: "net",
-        format: hms, color: COLORS.blue, yearDomain,
-      });
-      drawHistoryChart(finishes.filter((result) => result.aheadPct !== null), {
-        title: "Ahead of field", note: "Higher is better; ties are not counted as behind you",
-        key: "aheadPct", format: (value) => `${value.toFixed(1)}%`, color: COLORS.accent, yearDomain,
-      });
+      renderHistoryCharts(finishes);
     }
   } catch (error) {
     if (request !== historyRequest) return;
@@ -529,12 +996,43 @@ async function renderHistory(rider) {
   }
 }
 
+function renderHistoryCharts(finishes = historyFinishes) {
+  $("history-charts").replaceChildren();
+  if (finishes.length < 2) return;
+  const yearDomain = d3.extent(finishes, (result) => result.year);
+  const speed = historyMetric === "speed";
+  const metricResults = speed
+    ? finishes.map((result) => ({
+      ...result,
+      speed: Number.isFinite(result.rider.speed) ? result.rider.speed : null,
+    }))
+    : finishes;
+  const values = speed ? metricResults.filter((result) => Number.isFinite(result.speed)) : finishes;
+  drawHistoryChart(metricResults, {
+    title: speed ? "Average speed" : "Finish time",
+    note: speed ? "Higher is faster" : "Lower is faster",
+    key: speed ? "speed" : "net",
+    format: speed ? (value) => `${value.toFixed(1)} mph` : hms,
+    color: COLORS.blue, yearDomain,
+  });
+  if (values.length < 2) {
+    const card = d3.select($("history-charts")).append("article").attr("class", "card");
+    card.append("p").attr("class", "muted")
+      .text("Not enough speed data to show a trend.");
+  }
+  drawHistoryChart(finishes.filter((result) => result.aheadPct !== null), {
+    title: "Ahead of field", note: "Higher is better; ties are not counted as behind you",
+    key: "aheadPct", format: (value) => `${value.toFixed(1)}%`, color: COLORS.accent, yearDomain,
+  });
+}
+
 function historyLink(result) {
   return raceUrl(result.year, raceKey, { bib: result.rider.bib ?? result.rider.name });
 }
 
 function drawHistoryChart(results, { title, note, key, format, color, yearDomain }) {
-  if (results.length < 2) return;
+  const pointsData = results.filter((result) => Number.isFinite(result[key]));
+  if (pointsData.length < 2) return;
   const width = 520;
   const height = 250;
   const margin = { top: 16, right: 20, bottom: 40, left: 66 };
@@ -542,8 +1040,8 @@ function drawHistoryChart(results, { title, note, key, format, color, yearDomain
   card.append("div").attr("class", "card-head").append("h4").text(title);
   card.append("p").attr("class", "card-sub").text(note);
   const x = d3.scaleLinear(yearDomain, [margin.left, width - margin.right]);
-  const [min, max] = d3.extent(results, (result) => result[key]);
-  const padding = Math.max((max - min) * 0.15, 60);
+  const [min, max] = d3.extent(pointsData, (result) => result[key]);
+  const padding = Math.max((max - min) * 0.15, key === "speed" ? 0.5 : 60);
   const y = d3.scaleLinear(key === "aheadPct" ? [0, 100] : [Math.max(0, min - padding), max + padding],
     [height - margin.bottom, margin.top]).nice();
   const svg = card.append("svg").attr("viewBox", `0 0 ${width} ${height}`)
@@ -557,9 +1055,10 @@ function drawHistoryChart(results, { title, note, key, format, color, yearDomain
   svg.append("g").attr("class", "axis").attr("transform", `translate(0,${height - margin.bottom})`)
     .call(d3.axisBottom(x).tickValues(ticks).tickFormat(d3.format("d")).tickPadding(8));
   svg.append("path").datum(results)
-    .attr("d", d3.line().x((result) => x(result.year)).y((result) => y(result[key])))
+    .attr("d", d3.line().defined((result) => Number.isFinite(result[key]))
+      .x((result) => x(result.year)).y((result) => y(result[key])))
     .attr("fill", "none").attr("stroke", color).attr("stroke-width", 2);
-  const points = svg.append("g").selectAll("a").data(results).join("a")
+  const points = svg.append("g").selectAll("a").data(pointsData).join("a")
     .attr("href", historyLink)
     .attr("aria-label", (result) => `${result.year}: ${format(result[key])}, view result`);
   points.append("circle")
@@ -643,26 +1142,28 @@ function renderFacts(facts, target = "rider-facts") {
   }));
 }
 
-function domainFor(riderMinutes) {
-  const p995 = d3.quantileSorted(overallMinutes, 0.995);
+function domainFor(minutes, riderMinutes) {
+  const sorted = [...minutes].sort((a, b) => a - b);
+  const p995 = d3.quantileSorted(sorted, 0.995);
   return [
-    Math.floor(Math.min(overallMinutes[0], riderMinutes) / 30) * 30,
+    Math.floor(Math.min(sorted[0], riderMinutes) / 30) * 30,
     Math.ceil(Math.max(p995, riderMinutes + 10) / 30) * 30,
   ];
 }
 
 function drawCurves(rider) {
   const mine = rider.net / 60;
-  const [lo, hi] = domainFor(mine);
   const width = 520;
   const height = 230;
   const margin = { top: 24, right: 14, bottom: 34, left: 14 };
-  const x = d3.scaleLinear([lo, hi], [margin.left, width - margin.right]);
-  const xs = d3.range(lo, hi + 0.001, 0.25);
   const container = $("curves");
   container.replaceChildren();
 
   for (const [i, group] of groupsFor(rider, data.finishers, data.race).entries()) {
+    const minutes = group.times.map((t) => t / 60);
+    const [lo, hi] = domainFor(minutes, mine);
+    const x = d3.scaleLinear([lo, hi], [margin.left, width - margin.right]);
+    const xs = d3.range(lo, hi + 0.001, 0.25);
     const card = d3.select(container).append("article").attr("class", "card");
     const head = card.append("div").attr("class", "card-head");
     head.append("h4").text(group.title);
@@ -671,9 +1172,10 @@ function drawCurves(rider) {
     sub.append("span").text(`Median ${hms(group.median)}`);
     sub.append("span").text(`Top ${group.topPct.toFixed(1)}%  ·  ahead of ${group.behindPct.toFixed(1)}%`);
 
-    const minutes = group.times.map((t) => t / 60);
     const density = kde(minutes, xs);
-    const bins = d3.bin().domain([lo, hi]).thresholds(d3.range(lo, hi, 10))(minutes.filter((m) => m <= hi));
+    const binCount = 24;
+    const thresholds = d3.range(1, binCount).map((i) => lo + (hi - lo) * i / binCount);
+    const bins = d3.bin().domain([lo, hi]).thresholds(thresholds)(minutes.filter((m) => m <= hi));
     const binDensity = (b) => b.length / (minutes.length * (b.x1 - b.x0));
     const y = d3.scaleLinear(
       [0, Math.max(d3.max(density), d3.max(bins, binDensity)) * 1.16],
@@ -740,35 +1242,60 @@ function mulberry32(seed) {
 function drawWaves(rider) {
   waveResizeObserver?.disconnect();
   const rowH = 22;
-  const width = 1000;
-  const margin = { top: 34, right: 170, bottom: 48, left: 124 };
+  const margin = { top: 34, right: 160, bottom: 48, left: 140 };
+  const pad = 16;
   const height = rowH * waves.length;
-  const bounds = waves.flatMap((w) => [w.min, w.max]).map((s) => s / 60);
-  const x = d3.scaleLinear(
-    [Math.floor(d3.min(bounds) / 30) * 30, Math.ceil(d3.max(bounds) / 30) * 30],
-    [margin.left, width - margin.right],
-  );
+  const viewport = $("wave-rows");
+  const drawnWidth = viewport.clientWidth;
+
+  // The plot is drawn at a fixed pixels-per-minute scale so that everything up to 2×IQR fills the
+  // visible width; the slower tail of outliers extends past it and is reached by scrolling.
+  const fullMin = Math.floor(d3.min(waves, (w) => w.min) / 60 / 30) * 30;
+  const fullMax = Math.ceil(d3.max(waves, (w) => w.max) / 60 / 30) * 30;
+  const coreMax = Math.min(fullMax, Math.ceil(d3.max(waves, (w) =>
+    Math.min(w.max, w.q3 + 2 * (w.q3 - w.q1))) / 60 / 30) * 30);
+  const visibleWidth = Math.max(360, (drawnWidth || 1000) - margin.left - margin.right);
+  const pxPerMinute = (visibleWidth - 2 * pad) / Math.max(30, coreMax - fullMin);
+  const plotWidth = Math.round((fullMax - fullMin) * pxPerMinute + 2 * pad);
+  const totalWidth = margin.left + plotWidth + margin.right;
+  const x = d3.scaleLinear([fullMin, fullMax], [pad, plotWidth - pad]);
+  const ticks = d3.range(fullMin, fullMax + 1, 30);
+
   const rowY = (i) => rowH * i + rowH / 2;
   const random = mulberry32(data.race.year);
 
-  const headerSvg = d3.select($("wave-header")).html("").append("svg")
-    .attr("viewBox", `0 0 ${width} ${margin.top}`)
-    .attr("role", "img")
+  // Each band is three columns: pinned labels, the wide scrolling plot, and pinned stats.
+  const columns = (container, h) => {
+    const track = d3.select(container).html("").append("div")
+      .attr("class", "wave-track").style("width", `${totalWidth}px`);
+    const column = (name, w) => track.append("div").attr("class", `wave-col wave-${name}`)
+      .style("width", `${w}px`).append("svg")
+      .attr("width", w).attr("height", h).attr("viewBox", `0 0 ${w} ${h}`);
+    return {
+      left: column("left", margin.left).attr("aria-hidden", "true"),
+      plot: column("plot", plotWidth),
+      right: column("right", margin.right).attr("aria-hidden", "true"),
+    };
+  };
+  const head = columns($("wave-header"), margin.top);
+  const body = columns($("wave-rows-content"), height);
+  const axis = columns($("wave-axis"), margin.bottom);
+  head.plot.attr("role", "img")
     .attr("aria-label", `Start group, start, finishers and median columns; your finish ${hms(rider.net)}`);
-  const svg = d3.select($("wave-rows-content")).html("").append("svg")
-    .attr("viewBox", `0 0 ${width} ${height}`)
-    .attr("role", "img")
+  body.plot.attr("role", "img")
     .attr("aria-label", "Finish time distributions by start group, including pro men and pro women");
+  axis.plot.attr("role", "img").attr("aria-label", "Finish time axis in hours and minutes");
 
-  svg.append("g").selectAll("line").data(d3.range(x.domain()[0], x.domain()[1] + 1, 30)).join("line")
+  body.plot.append("g").selectAll("line").data(ticks).join("line")
     .attr("class", "gridline")
     .attr("x1", (t) => x(t)).attr("x2", (t) => x(t))
     .attr("y1", 0).attr("y2", height);
 
-  const header = headerSvg.append("g").attr("fill", COLORS.muted).attr("font-size", 11);
+  const header = head.left.append("g").attr("fill", COLORS.muted).attr("font-size", 11);
   header.append("text").attr("x", 8).attr("y", 18).text("START GROUP / START");
-  header.append("text").attr("x", width - margin.right + 18).attr("y", 18).text("FINISHERS");
-  header.append("text").attr("x", width - margin.right + 96).attr("y", 18).text("MEDIAN");
+  const headerStats = head.right.append("g").attr("fill", COLORS.muted).attr("font-size", 11);
+  headerStats.append("text").attr("x", 18).attr("y", 18).text("FINISHERS");
+  headerStats.append("text").attr("x", 96).attr("y", 18).text("MEDIAN");
 
   waves.forEach((w, i) => {
     const mineRow = w.kind === "pro"
@@ -779,21 +1306,23 @@ function drawWaves(rider) {
         : rider.raceGroup === "amateur" && w.wave === rider.wave;
     const color = mineRow ? COLORS.accent : COLORS.blue;
     const cy = rowY(i);
-    const row = svg.append("g").attr("class", mineRow ? "wave-highlight" : null);
     const rowName = w.label ?? `Wave ${w.wave}`;
     const startLabel = Number.isFinite(w.start) ? `${clockTime(w.start)} start` : null;
-    row.append("title").text(
-      [
-        `${rowName}${w.kind === "pro" && w.wave !== null ? ` (wave ${w.wave})` : ""}`,
-        startLabel,
-        `${fmt(w.n)} finishers`,
-        `median ${hms(w.median)}`,
-      ].filter(Boolean).join(" · "),
-    );
-    if (mineRow || i % 2 === 0) {
-      row.append("rect").attr("x", 0).attr("width", width).attr("y", cy - rowH / 2 + 0.5).attr("height", rowH - 1)
-        .attr("fill", mineRow ? COLORS.accent : COLORS.band).attr("opacity", mineRow ? 0.1 : 1);
-    }
+    const summary = [
+      `${rowName}${w.kind === "pro" && w.wave !== null ? ` (wave ${w.wave})` : ""}`,
+      startLabel,
+      `${fmt(w.n)} finishers`,
+      `median ${hms(w.median)}`,
+    ].filter(Boolean).join(" · ");
+    const [leftRow, row, rightRow] = [body.left, body.plot, body.right].map((svg) => {
+      const group = svg.append("g").attr("class", mineRow ? "wave-highlight" : null);
+      group.append("title").text(summary);
+      if (mineRow || i % 2 === 0) {
+        group.append("rect").attr("x", 0).attr("width", "100%").attr("y", cy - rowH / 2 + 0.5).attr("height", rowH - 1)
+          .attr("fill", mineRow ? COLORS.accent : COLORS.band).attr("opacity", mineRow ? 0.1 : 1);
+      }
+      return group;
+    });
     const lo = x(w.whiskerMin / 60);
     const hi = x(w.whiskerMax / 60);
     const isOutlier = (t) => t < w.lowerFence || t > w.upperFence;
@@ -822,22 +1351,24 @@ function drawWaves(rider) {
 
     const labelColor = mineRow ? COLORS.accent : COLORS.ink;
     const weight = mineRow ? 700 : 400;
-    const label = row.append("g").attr("font-size", 12).attr("dominant-baseline", "middle")
+    const labels = (group) => group.append("g").attr("font-size", 12).attr("dominant-baseline", "middle")
       .attr("font-weight", weight);
+    const label = labels(leftRow);
     label.append("text").attr("x", 8).attr("y", cy).attr("fill", labelColor)
       .text(w.label ?? String(w.wave).padStart(2, "0"));
     if (Number.isFinite(w.start)) {
       label.append("text").attr("x", w.label ? 78 : 44).attr("y", cy).attr("fill", labelColor)
         .text(clockTime(w.start));
     }
-    label.append("text").attr("x", width - margin.right + 18).attr("y", cy)
+    const stat = labels(rightRow);
+    stat.append("text").attr("x", 18).attr("y", cy)
       .attr("fill", mineRow ? COLORS.accent : COLORS.muted).text(fmt(w.n));
-    label.append("text").attr("x", width - margin.right + 96).attr("y", cy).attr("fill", COLORS.ink)
+    stat.append("text").attr("x", 96).attr("y", cy).attr("fill", COLORS.ink)
       .text(hms(w.median));
   });
 
   const mine = x(rider.net / 60);
-  svg.append("line").attr("x1", mine).attr("x2", mine)
+  body.plot.append("line").attr("x1", mine).attr("x2", mine)
     .attr("y1", 0).attr("y2", height)
     .attr("stroke", COLORS.red).attr("stroke-width", 1.4).attr("stroke-dasharray", "6 4");
   const myRow = waves.findIndex((w) => w.kind === "pro"
@@ -847,26 +1378,32 @@ function drawWaves(rider) {
         && (rider.division || `Junior ${rider.gender === "F" ? "women" : "men"}`) === w.division
       : rider.raceGroup === "amateur" && w.wave === rider.wave);
   if (myRow >= 0) {
-    svg.append("circle").attr("cx", mine).attr("cy", rowY(myRow)).attr("r", 5)
+    body.plot.append("circle").attr("cx", mine).attr("cy", rowY(myRow)).attr("r", 5)
       .attr("fill", COLORS.red).attr("stroke", "#fff").attr("stroke-width", 1.2);
   }
-  headerSvg.append("text").attr("x", mine + 6).attr("y", margin.top - 8)
+  const nearEnd = mine > plotWidth - 100;
+  head.plot.append("text").attr("x", nearEnd ? mine - 6 : mine + 6).attr("y", margin.top - 8)
+    .attr("text-anchor", nearEnd ? "end" : "start")
     .attr("fill", COLORS.red).attr("font-size", 11).attr("font-weight", 700).text(`YOU ${hms(rider.net)}`);
 
-  const axisSvg = d3.select($("wave-axis")).html("").append("svg")
-    .attr("viewBox", `0 0 ${width} ${margin.bottom}`)
-    .attr("role", "img")
-    .attr("aria-label", "Finish time axis in hours and minutes");
-  axisSvg.append("g").attr("class", "axis")
-    .call(d3.axisBottom(x).tickValues(d3.range(x.domain()[0], x.domain()[1] + 1, 30)).tickFormat(hm).tickPadding(8));
-  axisSvg.append("text").attr("x", (margin.left + width - margin.right) / 2).attr("y", margin.bottom - 8)
-    .attr("text-anchor", "middle").attr("fill", COLORS.muted).attr("font-size", 12).text("Finish time (h:mm)");
+  axis.plot.append("g").attr("class", "axis")
+    .call(d3.axisBottom(x).tickValues(ticks).tickFormat(hm).tickPadding(8));
+  axis.left.append("text").attr("x", margin.left - 8).attr("y", 24)
+    .attr("text-anchor", "end").attr("fill", COLORS.muted).attr("font-size", 12).text("Finish time (h:mm)");
 
-  const viewport = $("wave-rows");
+  let positioned = false;
   waveResizeObserver = new ResizeObserver(() => {
-    const scale = svg.node().getBoundingClientRect().width / width;
-    if (!scale || !viewport.clientHeight) return;
-    viewport.scrollTop = rowY(myRow) * scale - viewport.clientHeight / 2;
+    if (!viewport.clientHeight) return;
+    if (Math.abs(viewport.clientWidth - drawnWidth) > 2) {
+      drawWaves(rider);
+      return;
+    }
+    viewport.scrollTop = rowY(myRow) - (viewport.clientHeight - margin.top - margin.bottom) / 2;
+    if (positioned) return;
+    positioned = true;
+    // Start at the fast end, unless the rider finished in the scrolled-off tail.
+    const visible = viewport.clientWidth - margin.left - margin.right;
+    viewport.scrollLeft = mine > visible - pad ? mine - visible / 2 : 0;
   });
   waveResizeObserver.observe(viewport);
 }

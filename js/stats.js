@@ -12,7 +12,28 @@ export function parseRace(json) {
     return rider;
   });
   const finishers = riders.filter((r) => r.finished);
+  assignSpeeds(riders);
   return { race: json.race, riders, finishers };
+}
+
+// Fills `speed` (mph) from the published average, else from course distance and finish time.
+// Without a published distance, the distance implied by the rest of the event's published
+// speeds (median of speed * time) is used.
+function assignSpeeds(riders) {
+  const implied = new Map();
+  for (const rider of riders) {
+    if (rider.finished && rider.avgSpeed > 0) {
+      const miles = implied.get(rider.raceEvent) ?? [];
+      miles.push(rider.avgSpeed * rider.net / 3600);
+      implied.set(rider.raceEvent, miles);
+    }
+  }
+  const distances = new Map([...implied].map(([event, miles]) => [event, median(miles)]));
+  for (const rider of riders) {
+    const miles = rider.courseDistance > 0 ? rider.courseDistance : distances.get(rider.raceEvent);
+    rider.speed = rider.avgSpeed > 0 ? rider.avgSpeed
+      : rider.finished && miles > 0 ? miles * 3600 / rider.net : null;
+  }
 }
 
 export function selectRaceEvent(race, event, name) {
@@ -231,6 +252,38 @@ export function passCounts(rider, finishers) {
   return { passed, passedBy, net: passed - passedBy };
 }
 
+// Checkpoint rows for a rider from a year's splits.json: elapsed time, the leg since the previous
+// timed point, and the leg's average speed when both checkpoint distances are known. A finish
+// row is added from the official finish time and course distance (or the course's estimated one).
+// A missed checkpoint is left out of the legs, so the next timed point spans the gap.
+export function riderSplits(rider, splits) {
+  const bib = String(rider.bib);
+  const course = splits?.courses.find((candidate) => bib in candidate.riders);
+  if (!course) return null;
+  const times = course.riders[bib];
+  const points = course.checkpoints.map((checkpoint, i) => ({ ...checkpoint, elapsed: times[i] }));
+  if (rider.finished) {
+    points.push({
+      name: "Finish",
+      miles: rider.courseDistance > 0 ? rider.courseDistance : course.finishMiles ?? null,
+      location: null, elapsed: rider.net, finish: true,
+    });
+  }
+  let previous = { elapsed: 0, miles: 0 };
+  const rows = points.map((point) => {
+    if (!Number.isFinite(point.elapsed) || point.elapsed <= previous.elapsed) {
+      return { ...point, elapsed: null, leg: null, legMiles: null, speed: null };
+    }
+    const leg = point.elapsed - previous.elapsed;
+    const legMiles = Number.isFinite(point.miles) && Number.isFinite(previous.miles)
+      && point.miles > previous.miles ? point.miles - previous.miles : null;
+    previous = { elapsed: point.elapsed, miles: point.miles };
+    return { ...point, leg, legMiles, speed: legMiles === null ? null : legMiles * 3600 / leg };
+  });
+  return rows.some((row) => row.elapsed !== null)
+    ? { rows, estimated: course.estimated === true } : null;
+}
+
 export function passDistribution(rider, finishers) {
   const field = comparisonField(rider, finishers)
     .filter((other) => Number.isFinite(other.start) && Number.isFinite(other.clock));
@@ -273,6 +326,42 @@ export function median(values) {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = sorted.length >> 1;
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+export function ageGenderFinishTimes(finishers) {
+  const grouped = new Map();
+  for (const rider of finishers) {
+    if (!["M", "F"].includes(rider.gender)
+        || !Number.isFinite(rider.net) || rider.net <= 0) continue;
+    const hasAge = Number.isInteger(rider.age) && rider.age > 0 && rider.age <= 120;
+    const division = String(rider.division ?? "").trim();
+    const boundedDivision = /^[MF]\d{2}\d{2,3}$/i.test(division)
+      || /\b\d{1,3}\s*-\s*\d{1,3}\b/.test(division)
+      || /^(?:Men|Women|M|F)\s+\d{1,3}$/i.test(division);
+    if (!hasAge && !boundedDivision) continue;
+    const range = ageRange(rider);
+    if (!range || range[0] <= 0 || range[1] > 120 || range[0] > range[1]) continue;
+    if (!hasAge && range[0] !== range[1] && range[1] === 99) continue;
+    const [ageMin, ageMax] = range;
+    const key = `${ageMin}:${ageMax}`;
+    if (!grouped.has(key)) grouped.set(key, { ageMin, ageMax, M: [], F: [], speedM: [], speedF: [] });
+    const group = grouped.get(key);
+    group[rider.gender].push(rider.net);
+    if (rider.speed > 0) group[`speed${rider.gender}`].push(rider.speed);
+  }
+  return [...grouped.values()]
+    .map((genders) => ({
+      age: (genders.ageMin + genders.ageMax) / 2,
+      ageMin: genders.ageMin,
+      ageMax: genders.ageMax,
+      menMedian: genders.M.length ? median(genders.M) : null,
+      menFinishers: genders.M.length,
+      womenMedian: genders.F.length ? median(genders.F) : null,
+      womenFinishers: genders.F.length,
+      menMedianSpeed: genders.speedM.length ? median(genders.speedM) : null,
+      womenMedianSpeed: genders.speedF.length ? median(genders.speedF) : null,
+    }))
+    .sort((a, b) => a.age - b.age || a.ageMin - b.ageMin);
 }
 
 export function populationSd(values) {
@@ -360,7 +449,14 @@ function summarize(key, title, members, rider, officialRank) {
 
 export function divisionLabel(rider) {
   const division = rider.division || "";
-  if (rider.raceGroup !== "junior") return division;
+  if (rider.raceGroup !== "junior") {
+    // Compact codes (M2527, F7099) and spaced ranges (M 19-44, F 10-14) become "Men 25-27".
+    const adult = /^([FM])(\d{2})(\d{2,3})$/.exec(division) ?? /^([FM])\s+(\d{1,2})-(\d{1,3})$/.exec(division);
+    if (!adult) return division;
+    const [low, high] = [Number(adult[2]), Number(adult[3])];
+    const ages = low === high ? `${low}` : high >= 99 ? `${low}+` : `${low}-${high}`;
+    return `${adult[1] === "F" ? "Women" : "Men"} ${ages}`;
+  }
   const ageGroup = /^([FM])(\d{2})(\d{2})$/.exec(division)
     ?? /^([FM])\s*(\d{1,2})-(\d{1,2})(?:\s+Juniors?)?$/i.exec(division);
   if (ageGroup) {
