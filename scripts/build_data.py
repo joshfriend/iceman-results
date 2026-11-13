@@ -4,6 +4,7 @@ Every year lives in data/<year>/:
   race.json     hand-written config (date, results URL, wave timing, podium depth, raw sources)
   raw/          untouched source files for that year
   results.json  generated: the table the site loads
+  splits.json   generated: checkpoint times by bib, when the timing provider published them
 
 data/index.json is generated from the year folders so the site can list and compare years.
 
@@ -11,7 +12,9 @@ Usage: python3 scripts/build_data.py [YEAR ...]   (default: every year folder)
 """
 
 import csv
+import gzip
 import json
+import math
 import re
 import sys
 import unicodedata
@@ -26,7 +29,7 @@ RACE_NAME = "Iceman Cometh"
 FIELDS = [
     "bib", "person", "name", "city", "status", "net", "gender",
     "genderRank", "division", "divisionRank", "start", "wave", "athlinksRacerId", "age", "raceGroup",
-    "raceEvent", "raceGroupSource", "waveSource", "startSource",
+    "raceEvent", "raceGroupSource", "waveSource", "startSource", "avgSpeed", "courseDistance",
 ]
 START_LINE = re.compile(r"^\s*(\d+)\s+(.+?)\s+(\d+)\s+(\d{2}:\d{2}:\d{2})\s+(\d+)\s*$")
 RANKED = re.compile(r"^\s*(.*?)\s*\((-?\d+)\)\s*$")
@@ -43,6 +46,48 @@ def seconds(text):
 def published_age(value):
     text = str(value).strip()
     return int(text) if text.isdigit() and 0 < int(text) <= 120 else None
+
+
+def published_speed(value):
+    text = str(value).strip()
+    if not text:
+        return None
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s+mph", text)
+    if not match:
+        raise ValueError(f"Unrecognized published speed: {value!r}")
+    speed = float(match[1])
+    return speed if math.isfinite(speed) and speed > 0 else None
+
+
+def athlinks_speed(pace):
+    if not pace or pace.get("paceType") != "speed":
+        return None
+    distance = pace.get("distance", {}).get("distanceInMeters")
+    time = pace.get("time", {}).get("timeInMillis")
+    if not all(isinstance(value, (int, float)) and math.isfinite(value) and value > 0
+               for value in (distance, time)):
+        return None
+    return distance / 1609.344 / (time / 3600000)
+
+
+def registericeman_distance(splits):
+    splits = sorted((split for split in splits if split.get("deleted") != "T"),
+                    key=lambda split: split["split_order"])
+    if not splits or splits[-1]["split_name"].strip().lower() != "finish":
+        return None
+    segments = []
+    for split in splits:
+        distance = split.get("split_distance")
+        if not isinstance(distance, (int, float)) or not math.isfinite(distance) or distance <= 0:
+            return None
+        unit = split.get("split_distance_units")
+        if unit not in {"M", "K"}:
+            raise ValueError(f"Unrecognized split distance unit: {unit!r}")
+        segments.append(distance if unit == "M" else distance / 1.609344)
+    # Some result sets label splits with cumulative distances (8.4, 16.6, 30.9) and others
+    # with per-segment lengths (8.4, 8.2, 14.3); a decrease is only possible for segments.
+    cumulative = len(segments) > 1 and all(a < b for a, b in zip(segments, segments[1:]))
+    return segments[-1] if cumulative else sum(segments)
 
 
 def ranked(text):
@@ -283,6 +328,7 @@ def parse_raceresult(path):
     """RaceResult overall list: BIB, ID, place|status, name, city, net, BIB, gender (rank), division (rank)."""
     source = json.loads(path.read_text())
     has_division = any("CONTEST.NAME" in field for field in source["DataFields"])
+    speed_column = next((i for i, field in enumerate(source["DataFields"]) if '" mph"' in field), None)
     for row in source["data"]:
         gender, gender_rank = ranked(row[7])
         division, division_rank = ranked(row[8]) if has_division else ("", None)
@@ -301,6 +347,8 @@ def parse_raceresult(path):
             "genderRank": gender_rank,
             "division": division,
             "divisionRank": division_rank,
+            "avgSpeed": published_speed(row[speed_column])
+            if isinstance(status, int) and speed_column is not None else None,
         }
 
 
@@ -323,6 +371,7 @@ def parse_registericeman(path, first_start, wave_seconds):
         raise ValueError(f"{path} is missing columns: {', '.join(missing)}")
 
     first_set = pages[0]["resultSet"]
+    course_distance = registericeman_distance(first_set.get("splits", []))
     expected = first_set["numResults"]
     rows = []
     for page in pages:
@@ -379,6 +428,8 @@ def parse_registericeman(path, first_start, wave_seconds):
             "city": str(value(row, "City")).strip(),
             "status": status,
             "net": net,
+            "avgSpeed": published_speed(value(row, "Pace")) if net is not None and "Pace" in headings else None,
+            "courseDistance": course_distance,
             "gender": str(value(row, "Gender")).strip(),
             "genderRank": rank_number(value(row, "Gender Place")),
             "division": str(value(row, "Age Group")).strip(),
@@ -502,6 +553,10 @@ def parse_athlinks(path, config):
             if group["totalAthletes"] != expected:
                 raise ValueError(f"{path} has inconsistent totals for course {course['courseId']}")
             rows.extend(group["interval"]["intervalResults"])
+        distance = group["interval"].get("distance", {}).get("distanceInMeters")
+        course_distance = distance / 1609.344 if (
+            isinstance(distance, (int, float)) and math.isfinite(distance) and distance > 0
+        ) else None
         unique_rows = {}
         for row in rows:
             entry_id = row.get("entryId")
@@ -559,12 +614,17 @@ def parse_athlinks(path, config):
                     division, division_rank = next(iter(candidates))
                 else:
                     ambiguous_divisions += 1
+            speed = athlinks_speed(row.get("pace")) if net is not None else None
+            if speed is None and net is not None and course_distance is not None:
+                speed = course_distance / (time_ms / 3600000)
             records.append({
                 "bib": str(row.get("bib", "")).strip(),
                 "name": str(row.get("displayName", "")).strip(),
                 "city": str(row.get("locality", "")).strip(),
                 "status": status,
                 "net": net,
+                "avgSpeed": speed,
+                "courseDistance": course_distance,
                 "gender": str(row.get("gender", "")).strip(),
                 "genderRank": row.get("genderRank") if net is not None else None,
                 "division": division,
@@ -655,6 +715,196 @@ def race_group(rider):
             or ages and 0 < int(ages[2] or ages[1]) <= 18):
         return "junior"
     return "amateur"
+
+
+CLOCK = re.compile(r"\d+:\d{2}(?::\d{2})?(?:\.\d+)?")
+METERS_PER_MILE = 1609.344
+
+
+def split_seconds(value):
+    text = str(value).strip()
+    return round(seconds(text)) if CLOCK.fullmatch(text) else None
+
+
+def split_bib(value):
+    text = str(value).strip()
+    return int(text) if text.isdigit() else None
+
+
+def monotonic_splits(times):
+    """Blank the readings outside the longest increasing run; a stray mat read can break the order."""
+    points = [i for i, time in enumerate(times) if time is not None]
+    best = {}
+    for position, i in enumerate(points):
+        chain = max((best[j] for j in points[:position] if times[j] < times[i]), key=len, default=[])
+        best[i] = chain + [i]
+    keep = set(max(best.values(), key=len, default=[]))
+    return [time if i in keep else None for i, time in enumerate(times)]
+
+
+def add_split_times(riders, bib, times, path):
+    if bib is None:
+        return
+    if bib in riders and riders[bib] != times:
+        raise ValueError(f"{path} lists conflicting splits for bib {bib}")
+    riders[bib] = times
+
+
+def raceresult_splits(path):
+    """RaceResult split report: a quoted label column precedes each cumulative SegmentN time."""
+    source = json.loads(gzip.decompress(path.read_bytes()) if path.suffix == ".gz" else path.read_text())
+    fields = source["DataFields"]
+    columns = [
+        (re.fullmatch(r'"(.+):"', fields[i])[1], i + 1) for i in range(len(fields) - 1)
+        if re.fullmatch(r'"(.+):"', fields[i]) and fields[i + 1].startswith("Segment")
+    ]
+    if not columns:
+        raise ValueError(f"{path} has no split columns")
+    riders = {}
+    for row in source["data"]:
+        add_split_times(riders, split_bib(row[0]), [split_seconds(row[column]) for _, column in columns], path)
+    return {"checkpoints": [{"name": name, "miles": None} for name, _ in columns], "riders": riders}
+
+
+def athlinks_splits(path):
+    source = json.loads(gzip.decompress(path.read_bytes()))
+    courses = []
+    for course in source["courses"]:
+        intervals = sorted(course["intervals"], key=lambda interval: interval["metadata"]["displayOrder"])
+        riders = {}
+        for position, interval in enumerate(intervals):
+            for page in interval["pages"]:
+                for group in page:
+                    for row in group["interval"]["intervalResults"]:
+                        bib = split_bib(row["bib"])
+                        millis = row["time"]["timeInMillis"]
+                        if bib is None or not millis or millis <= 0:
+                            continue
+                        times = riders.setdefault(bib, [None] * len(intervals))
+                        if times[position] not in {None, round(millis / 1000)}:
+                            raise ValueError(f"{path} lists conflicting splits for bib {bib}")
+                        times[position] = round(millis / 1000)
+        courses.append({
+            "checkpoints": [{
+                "name": interval["metadata"]["name"],
+                "miles": round(interval["metadata"]["distance"] / METERS_PER_MILE, 2),
+            } for interval in intervals],
+            "riders": riders,
+        })
+    return courses
+
+
+def registericeman_splits(path):
+    """Registericeman checkpoint columns hold cumulative times, or per-leg times without '(Cumulative)'."""
+    source = json.loads(path.read_text())
+    first = source["pages"][0]
+    splits = sorted(
+        (split for split in first["resultSet"]["splits"] if split.get("deleted") != "T"),
+        key=lambda split: split["split_order"],
+    )[:-1]
+    headings = {heading["name"]: i for i, heading in enumerate(first["headings"])}
+    columns = []
+    for split in splits:
+        for suffix, cumulative in ((" Time (Cumulative)", True), (" Time", False)):
+            if split["split_name"] + suffix in headings:
+                columns.append((headings[split["split_name"] + suffix], cumulative))
+                break
+        else:
+            raise ValueError(f"{path} is missing the {split['split_name']} time column")
+    distances = [
+        split["split_distance"] / (1.609344 if split["split_distance_units"] == "K" else 1)
+        for split in first["resultSet"]["splits"] if split.get("deleted") != "T"
+    ]
+    cumulative_distances = all(a < b for a, b in zip(distances, distances[1:]))
+    miles = distances if cumulative_distances else [sum(distances[:i + 1]) for i in range(len(distances))]
+    riders = {}
+    for page in source["pages"]:
+        for row in page["resultSet"]["results"]:
+            times, total = [], 0
+            for column, cumulative in columns:
+                value = split_seconds(row[column])
+                if cumulative:
+                    total = value
+                elif value is None or total is None:
+                    total = None
+                else:
+                    total += value
+                times.append(total)
+            add_split_times(riders, split_bib(row[headings["Bib"]]), times, path)
+    return {
+        "checkpoints": [
+            {"name": split["split_name"], "miles": round(miles[i], 2)} for i, split in enumerate(splits)
+        ],
+        "riders": riders,
+    }
+
+
+def apply_split_distances(courses, config, riders):
+    """Fill missing checkpoint miles from a GPS measurement, scaled to the year's implied course distance.
+
+    The GPS track is shorter than the nominal course, so its fractions of the distance are kept and
+    scaled to the distance that the published speeds imply. The result is marked estimated.
+    """
+    measured = config.get("splitDistances")
+    if not measured:
+        return
+    speed, net, event, status = (FIELDS.index(name) for name in ("avgSpeed", "net", "raceEvent", "status"))
+    implied = [
+        rider[speed] * rider[net] / 3600 for rider in riders
+        if rider[event] != "slush-cup" and isinstance(rider[status], int)
+        and rider[net] and rider[speed]
+    ]
+    if not implied:
+        raise ValueError(f"{config['year']}: splitDistances need published speeds to scale to")
+    course_distance = sum(implied) / len(implied)
+    scale = course_distance / measured["gpsFinishMiles"]
+    for course in courses:
+        if [checkpoint["name"] for checkpoint in course["checkpoints"]] != measured["checkpoints"]:
+            continue
+        if any(checkpoint["miles"] is not None for checkpoint in course["checkpoints"]):
+            raise ValueError(f"{config['year']}: splitDistances conflict with published distances")
+        for checkpoint, miles in zip(course["checkpoints"], measured["gpsMiles"]):
+            checkpoint["miles"] = round(miles * scale, 2)
+        course["finishMiles"] = round(course_distance, 2)
+        course["estimated"] = True
+
+
+def build_splits(folder, config, riders):
+    """Return the year's checkpoint times for riders in results.json, or None when none were published."""
+    bibs = {rider[FIELDS.index("bib")] for rider in riders}
+    if folder.parent != DATA:
+        return None
+    inventory = json.loads((DATA / "splits.json").read_text())
+    entry = next((year for year in inventory["years"] if year["year"] == config["year"]), None)
+    courses = []
+    for source in entry["sources"] if entry else []:
+        path = folder / source["path"]
+        if source["format"] == "athlinks":
+            courses.extend(athlinks_splits(path))
+        elif source["format"] == "raceresult":
+            courses.append(raceresult_splits(path))
+        else:
+            courses.append(registericeman_splits(path))
+    locations = config.get("splitLocations", {})
+    seen = {}
+    for course in courses:
+        course["riders"] = {
+            str(bib): monotonic_splits(times) for bib, times in course["riders"].items()
+            if bib in bibs and any(time is not None for time in times)
+        }
+        for checkpoint in course["checkpoints"]:
+            checkpoint["location"] = locations.get(checkpoint["name"])
+        # A report may repeat riders from another (e.g. junior within overall); only exact repeats are allowed.
+        for bib in list(course["riders"]):
+            if bib in seen:
+                if seen[bib] != (course["checkpoints"], course["riders"][bib]):
+                    raise ValueError(f"{folder}: bib {bib} has conflicting split courses")
+                del course["riders"][bib]
+            else:
+                seen[bib] = (course["checkpoints"], course["riders"][bib])
+    courses = [course for course in courses if course["riders"]]
+    apply_split_distances(courses, config, riders)
+    return {"courses": courses} if courses else None
 
 
 def build_year(folder):
@@ -750,6 +1000,8 @@ def build_year(folder):
     for r in parsed_results:
         r.setdefault("athlinksRacerId", None)
         r.setdefault("age", None)
+        r.setdefault("avgSpeed", None)
+        r.setdefault("courseDistance", None)
         r.setdefault("raceGroup", race_group(r))
         if r["raceGroupSource"] is None:
             r["raceGroupSource"] = (
@@ -857,6 +1109,14 @@ def build_year(folder):
         separators=(",", ":"), ensure_ascii=False,
     ))
     print(f"Wrote {(folder / 'results.json').relative_to(ROOT)}: {len(riders)} riders, {finishers} finishers")
+    splits = build_splits(folder, config, riders)
+    splits_path = folder / "splits.json"
+    if splits:
+        splits_path.write_text(json.dumps(splits, separators=(",", ":"), ensure_ascii=False))
+        count = sum(len(course["riders"]) for course in splits["courses"])
+        print(f"Wrote {splits_path.relative_to(ROOT)}: {count} riders with checkpoint times")
+    else:
+        splits_path.unlink(missing_ok=True)
 
 
 def main(years):
@@ -872,6 +1132,10 @@ def main(years):
             fields = results["fields"]
             event_index = fields.index("raceEvent")
             status_index = fields.index("status")
+            net_index = fields.index("net")
+            gender_index = fields.index("gender")
+            speed_index = fields.index("avgSpeed") if "avgSpeed" in fields else None
+            distance_index = fields.index("courseDistance") if "courseDistance" in fields else None
             riders = [
                 rider for rider in results["riders"]
                 if rider[event_index] == event
@@ -879,13 +1143,53 @@ def main(years):
             ]
             if not riders:
                 continue
-            entries.append({
+            entry = {
                 "year": results["race"]["year"],
                 "date": results["race"]["date"],
                 "path": f"{folder.name}/results.json",
+                **({"splits": f"{folder.name}/splits.json"} if (folder / "splits.json").exists() else {}),
                 "riders": len(riders),
                 "finishers": sum(isinstance(rider[status_index], int) for rider in riders),
-            })
+            }
+            if event == "iceman":
+                def fastest_for(members):
+                    finishers = sorted(
+                        (rider for rider in members
+                         if isinstance(rider[status_index], int)
+                         and isinstance(rider[net_index], (int, float))
+                         and rider[net_index] > 0),
+                        key=lambda rider: rider[net_index],
+                    )
+                    winner = finishers[0] if finishers else None
+                    return winner, len(finishers)
+
+                for key, members in (
+                    ("men", [r for r in riders if r[gender_index] == "M"]),
+                    ("women", [r for r in riders if r[gender_index] == "F"]),
+                ):
+                    winner, count = fastest_for(members)
+                    entry[f"{key}Fastest"] = winner[net_index] if winner else None
+                    entry[f"{key}Finishers"] = count
+                    entry[f"{key}WinnerSpeed"] = (
+                        winner[speed_index] if winner and speed_index is not None else None
+                    )
+                winner, _ = fastest_for(riders)
+                distance = winner[distance_index] if winner and distance_index is not None else None
+                estimated = False
+                if distance is None and winner and speed_index is not None:
+                    # Averaging every finisher's speed x time cancels the rounding of each speed.
+                    implied = [
+                        rider[speed_index] * rider[net_index] / 3600 for rider in riders
+                        if isinstance(rider[status_index], int)
+                        and isinstance(rider[net_index], (int, float)) and rider[net_index] > 0
+                        and isinstance(rider[speed_index], (int, float)) and rider[speed_index] > 0
+                    ]
+                    if implied:
+                        distance = sum(implied) / len(implied)
+                        estimated = True
+                entry["courseDistance"] = distance
+                entry["courseDistanceEstimated"] = estimated
+            entries.append(entry)
         return sorted(entries, key=lambda entry: entry["year"], reverse=True)
 
     events = {

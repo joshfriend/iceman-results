@@ -6,9 +6,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts.build_data import (
-    athlinks_divisions, athlinks_race_group, build_year, FIELDS, parse_athlinks,
+    apply_split_distances, athlinks_divisions, athlinks_race_group, athlinks_speed, build_year, FIELDS, monotonic_splits, parse_athlinks,
+    raceresult_splits, registericeman_splits,
     parse_metadata_csv, parse_raceresult, parse_registericeman, parse_runmichigan,
-    parse_start_list, parse_wave_placements, published_age, race_group, supplement_athlinks_ids,
+    parse_start_list, parse_wave_placements, published_age, published_speed, race_group,
+    registericeman_distance, supplement_athlinks_ids,
     supplement_metadata, supplement_wave_placements,
 )
 from scripts.download_athlinks import deduplicate_rows, division_group, fetch_division_page, write_year
@@ -16,6 +18,52 @@ from scripts.download_supplemental import raceresult, registericeman
 
 
 class AthlinksIdentityTests(unittest.TestCase):
+    def test_published_speed_preserves_mph_and_rejects_unknown_units(self):
+        self.assertEqual(published_speed("18.6 mph"), 18.6)
+        self.assertIsNone(published_speed(""))
+        self.assertIsNone(published_speed("0.0 mph"))
+        with self.assertRaisesRegex(ValueError, "Unrecognized published speed"):
+            published_speed("30 km/h")
+
+    def test_athlinks_speed_uses_canonical_distance_and_time(self):
+        pace = {
+            "paceType": "speed",
+            "distance": {"distanceInMeters": 48280.32, "distanceUnit": "mi"},
+            "time": {"timeInMillis": 7200000, "timeUnit": "h"},
+        }
+        self.assertAlmostEqual(athlinks_speed(pace), 15)
+        for value in (None, {}, {**pace, "paceType": "notcalculated"},
+                      {**pace, "time": {"timeInMillis": 0}},
+                      {**pace, "distance": {"distanceInMeters": -1}}):
+            with self.subTest(pace=value):
+                self.assertIsNone(athlinks_speed(value))
+
+    def test_registericeman_distance_handles_segment_and_cumulative_labels(self):
+        splits = [
+            {"split_name": "Finish", "split_order": 3, "split_distance": 14.3, "split_distance_units": "M"},
+            {"split_name": "8.4 Mile", "split_order": 1, "split_distance": 8.4, "split_distance_units": "M"},
+            {"split_name": "16.6 Mile", "split_order": 2, "split_distance": 8.2, "split_distance_units": "M"},
+        ]
+        self.assertAlmostEqual(registericeman_distance(splits), 30.9)
+        cumulative = [
+            {**splits[1], "split_distance": 8.4},
+            {**splits[2], "split_distance": 16.6},
+            {**splits[0], "split_distance": 30.9},
+        ]
+        self.assertAlmostEqual(registericeman_distance(cumulative), 30.9)
+        self.assertIsNone(registericeman_distance(splits[1:]))
+        self.assertIsNone(registericeman_distance([]))
+        self.assertAlmostEqual(registericeman_distance([{
+            "split_name": "Finish", "split_order": 1, "split_distance": 16.09344,
+            "split_distance_units": "K",
+        }]), 10)
+        self.assertAlmostEqual(registericeman_distance(splits + [{
+            "split_name": "Old finish", "split_order": 4, "split_distance": 10,
+            "split_distance_units": "M", "deleted": "T",
+        }]), 30.9)
+        with self.assertRaisesRegex(ValueError, "Unrecognized split distance unit"):
+            registericeman_distance([{**splits[0], "split_distance_units": "unknown"}])
+
     def test_published_age_handles_source_placeholders(self):
         for value in (None, "", 0, -1, "N/A", "unknown", 121):
             with self.subTest(value=value):
@@ -104,6 +152,40 @@ class AthlinksDivisionTests(unittest.TestCase):
         rider = parse_athlinks(self.overall_path, self.config)[0]
         self.assertEqual((rider["division"], rider["divisionRank"], rider["status"]), ("M 40-44", 2, 10))
         self.assertIsNone(rider["wave"])
+
+    def test_athlinks_course_distance_does_not_require_a_calculated_speed(self):
+        source = json.loads(self.overall_path.read_text())
+        source["courses"][0]["pages"][0][0]["interval"]["distance"] = {
+            "distanceInMeters": 48280.32, "distanceUnit": "m",
+        }
+        self.overall_path.write_text(json.dumps(source))
+        rider = parse_athlinks(self.overall_path, self.config)[0]
+        self.assertAlmostEqual(rider["courseDistance"], 30)
+        self.assertAlmostEqual(rider["avgSpeed"], 30)
+
+        self.division_path.write_text(json.dumps({"eventId": 100, "divisions": []}))
+        source["courses"][0]["pages"][0][0]["interval"]["intervalResults"][0]["time"]["timeInMillis"] = 3600500
+        self.overall_path.write_text(json.dumps(source))
+        rider = parse_athlinks(self.overall_path, self.config)[0]
+        self.assertAlmostEqual(rider["avgSpeed"], 30 / (3600500 / 3600000))
+
+        source["courses"][0]["pages"][0][0]["interval"]["intervalResults"][0]["entryStatus"] = "DNF"
+        self.overall_path.write_text(json.dumps(source))
+        self.assertIsNone(parse_athlinks(self.overall_path, self.config)[0]["avgSpeed"])
+
+    def test_complete_course_speed_is_preserved_but_nonfinisher_speed_is_not(self):
+        pace = {
+            "paceType": "speed",
+            "distance": {"distanceInMeters": 32186.88},
+            "time": {"timeInMillis": 3600000},
+        }
+        for status in ("", "DNF", "DNS", "DSQ"):
+            self.write_sources([{**self.row, "pace": pace, "entryStatus": status}], [])
+            rider = parse_athlinks(self.overall_path, self.config)[0]
+            if status:
+                self.assertIsNone(rider["avgSpeed"])
+            else:
+                self.assertAlmostEqual(rider["avgSpeed"], 20)
 
     def test_nonfinish_status_overrides_positive_times_and_places(self):
         for raw, expected in (("DNF", "DNF"), ("DNS", "DNS"), ("DQ", "DSQ"), ("DSQ", "DSQ")):
@@ -267,13 +349,19 @@ class SupplementalResultsTests(unittest.TestCase):
         self.assertEqual(len(riders), 123)
         self.assertEqual(riders[0]["net"], 5975)
         self.assertNotEqual(riders[0]["net"], 37 * 60 + 59)
+        self.assertEqual(riders[0]["avgSpeed"], 18.6)
+        self.assertNotEqual(riders[0]["avgSpeed"], 22.6)
+        self.assertAlmostEqual(riders[0]["courseDistance"], 30.9)
 
     def test_raceresult_pro_list_has_no_division_column(self):
         riders = list(parse_raceresult(Path("data/2026/raw/pro-results.json")))
         self.assertEqual(len(riders), 131)
         self.assertEqual(riders[0]["net"], 5577)
         self.assertEqual(riders[0]["division"], "")
+        self.assertEqual(riders[0]["avgSpeed"], 20)
         self.assertTrue(all(rider["net"] is None for rider in riders
+                            if not isinstance(rider["status"], int)))
+        self.assertTrue(all(rider["avgSpeed"] is None for rider in riders
                             if not isinstance(rider["status"], int)))
 
     def test_raceresult_negative_overall_status_is_a_dnf(self):
@@ -740,3 +828,65 @@ class WavePlacementTests(unittest.TestCase):
                 self.assertTrue(all(rider["start"] is None for rider in sourced))
                 self.assertIn("bsnyd.com/iceman/data/Iceman", result["race"]["dataSources"]
                               ["wavePlacements"]["sourceUrl"])
+
+
+class SplitParsingTests(unittest.TestCase):
+    def test_stray_reading_is_blanked_without_reordering_the_rest(self):
+        self.assertEqual(monotonic_splits([1400, 10000, 5200, 5900]), [1400, None, 5200, 5900])
+        self.assertEqual(monotonic_splits([None, 5, 7]), [None, 5, 7])
+
+    def test_raceresult_splits_use_labelled_cumulative_segments(self):
+        payload = {
+            "DataFields": ["BIB", "ID", '"Dockery:"', "Segment1", "x", '"Ice Station Zebra:"', "Segment3", "[Stage1_NetTime]"],
+            "data": [["7", "1", "Dockery:", "26:34", "1 / 9", "Ice Station Zebra:", "", "1:45:00"]],
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "splits.json"
+            path.write_text(json.dumps(payload))
+            course = raceresult_splits(path)
+        self.assertEqual([c["name"] for c in course["checkpoints"]], ["Dockery", "Ice Station Zebra"])
+        self.assertEqual(course["riders"], {7: [1594, None]})
+
+    def test_registericeman_splits_accumulate_leg_times_and_convert_distances(self):
+        def source(cumulative, leg_names):
+            return {"pages": [{
+                "headings": [{"name": name} for name in ["Bib", *leg_names]],
+                "resultSet": {
+                    "splits": [
+                        {"split_name": "8.4 Mile", "split_order": 1, "split_distance": 8.4, "split_distance_units": "M"},
+                        {"split_name": "16.6 Mile", "split_order": 2, "split_distance": 16.6 if cumulative else 8.2,
+                         "split_distance_units": "M"},
+                        {"split_name": "Finish", "split_order": 3, "split_distance": 30.9 if cumulative else 14.3,
+                         "split_distance_units": "M"},
+                    ],
+                    "results": [["5", "24:40", "36:53", "38:42"]],
+                },
+            }]}
+
+        for cumulative, names, expected in (
+            (True, ["8.4 Mile Time (Cumulative)", "16.6 Mile Time (Cumulative)", "Finish Time (Cumulative)"], [1480, 2213]),
+            (False, ["8.4 Mile Time", "16.6 Mile Time", "Finish Time"], [1480, 3693]),
+        ):
+            with self.subTest(cumulative=cumulative), tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / "results.json"
+                path.write_text(json.dumps(source(cumulative, names)))
+                course = registericeman_splits(path)
+                self.assertEqual([c["miles"] for c in course["checkpoints"]], [8.4, 16.6])
+                self.assertEqual(course["riders"], {5: expected})
+
+    def test_gps_distances_keep_fractions_and_scale_to_implied_course_distance(self):
+        def rider(speed, net, event="iceman"):
+            row = dict.fromkeys(FIELDS)
+            row.update(avgSpeed=speed, net=net, status=1, raceEvent=event)
+            return [row[field] for field in FIELDS]
+
+        courses = [
+            {"checkpoints": [{"name": "A", "miles": None}, {"name": "B", "miles": None}]},
+            {"checkpoints": [{"name": "B", "miles": None}]},
+        ]
+        config = {"year": 2026, "splitDistances": {"checkpoints": ["A", "B"], "gpsMiles": [5, 10], "gpsFinishMiles": 20}}
+        # 20 mph for 1.5 h implies a 30 mile course; the Slush Cup is excluded.
+        apply_split_distances(courses, config, [rider(20, 5400), rider(10, 3600, "slush-cup")])
+        self.assertEqual([c["miles"] for c in courses[0]["checkpoints"]], [7.5, 15])
+        self.assertEqual((courses[0]["finishMiles"], courses[0]["estimated"]), (30, True))
+        self.assertIsNone(courses[1]["checkpoints"][0]["miles"])

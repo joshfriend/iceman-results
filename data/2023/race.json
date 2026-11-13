@@ -33,5 +33,13 @@
   "wavePlacements": {
     "path": "raw/wave-placements.json",
     "sourceUrl": "https://bsnyd.com/iceman/data/Iceman%20-%202023.csv"
+  },
+  "passCounts": {
+    "path": "raw/pass-counts.csv",
+    "sourceUrl": "https://docs.google.com/spreadsheets/d/1_G48EFjquH0kAA3gAH8MQ1Bn1OtYGTYggEnBKbpxOcs/edit",
+    "credits": [
+      "Stephen Spry",
+      "Ben Snyder"
+    ]
   }
 }

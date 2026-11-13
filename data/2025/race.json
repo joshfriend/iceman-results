@@ -6,6 +6,10 @@
   "waveSeconds": 180,
   "podiumDepth": 5,
   "resultsFormat": "registericeman",
+  "splitLocations": {
+    "8.4 Mile": "Dockery Rd",
+    "16.6 Mile": "North Broomhead Rd"
+  },
   "sources": {
     "results": "raw/overall-results.json"
   },

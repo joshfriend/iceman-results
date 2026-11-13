@@ -57,6 +57,12 @@
     "3:44:34",
     "3:44:35"
   ],
+  "splitDistances": {
+    "source": "Rider GPS (Garmin activity 25000595302, bib 4026): distance travelled from the 10:09:00 gun to the clock time of each timing mat. The 2025 course file does not match the 2026 route, and RaceResult publishes no checkpoint distances.",
+    "checkpoints": ["Dockery", "Williamsburg", "Ice Station Zebra"],
+    "gpsMiles": [7.94, 19.18, 26.1],
+    "gpsFinishMiles": 29.41
+  },
   "sources": {
     "results": "raw/overall-results.json",
     "startList": "raw/start-list.txt"
