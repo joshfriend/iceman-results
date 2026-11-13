@@ -149,6 +149,7 @@ function RacePage({ index, raceKey, eventInfo, entry, data, loader, raceHistory 
         : " (start-wave data unavailable for this year)."}</span>
       <br />Hat tip to Stephen Spry and <a href="https://bsnyd.com/iceman">Ben Snyder</a> for historical pass-count and wave placement data.
       {" "}Not affiliated with the Iceman Cometh Challenge.
+      <br />Made by <a href="https://github.com/joshfriend/iceman-results">Josh Friend</a>.
     </footer>
   </>;
 }
