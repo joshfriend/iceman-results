@@ -3,13 +3,27 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "vite --host",
+    "build": "vite build && node scripts/copy_site_data.js",
+    "preview": "vite preview --host",
     "build:data": "python3 scripts/build_data.py",
     "audit:sources": "python3 scripts/audit_sources.py",
     "download:history": "python3 scripts/download_athlinks.py",
     "download:supplemental": "python3 -m scripts.download_supplemental",
     "download:waves": "python3 scripts/download_wave_placements.py",
     "download:splits": "python3 -m scripts.download_splits",
-    "test": "node --test",
-    "serve": "python3 -m http.server 8000"
+    "test": "node --test tests/*.test.js && vitest run",
+    "serve": "vite --host"
+  },
+  "dependencies": {
+    "d3": "^7.9.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.0",
+    "jsdom": "^26.1.0",
+    "vitest": "^4.1.12",
+    "vite": "^7.2.0"
   }
 }

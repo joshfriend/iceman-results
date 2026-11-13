@@ -4,8 +4,10 @@
 
 | Path | What |
 |---|---|
-| `index.html`, `style.css`, `js/app.js` | Page and D3 charts (D3 loaded from jsDelivr) |
-| `js/stats.js` | Pure stats (passes, groups, podium, KDE, wave stats, next-wave estimate) shared with tests |
+| `index.html`, `style.css`, `src/` | React page components, data loading, and D3 chart modules |
+| `src/stats/` | Pure race calculations and formatting, organized by responsibility and shared with tests |
+| `scripts/copy_site_data.js` | Copies the indexed results and split files into the production build |
+| `.github/workflows/deploy.yml` | Tests, builds, and deploys the site to GitHub Pages |
 | `data/index.json` | **Generated.** Available races and years, newest first, with paths, event-specific counts, and Iceman yearly winner time/speed and course-distance summaries |
 | `scripts/audit_sources.py` | Generates an optional offline source-coverage report at `data/source-audit.json`; the website does not load it |
 | `data/<year>/race.json` | Per-year config: date, results URL, wave timing when published, podium depth, optional wave time requirements and wave assignments, raw source paths and attribution |
@@ -20,6 +22,10 @@
 | `data/splits.json` | Offline split-source inventory by year; empty sources mean no intermediate splits were exposed by the archived providers |
 | `data/<year>/raw/*splits*.json.gz` | Gzip-compressed JSON split reports with original source responses |
 | `scripts/download_supplemental.py` | Downloads Slush Cup results, separate 2024–2026 pro/junior results, and published 2008/2010 category archives |
+
+The rider report composes separate summary, splits, history, and finish-detail components
+in `src/components/`. The finish-detail component owns the lifecycle of the D3 rider
+charts in `src/charts/riderCharts.js`; React owns the surrounding report markup.
 
 ### Data format
 
@@ -143,22 +149,26 @@ Early-season 2015/2017 captures are not treated as verified race-day schedules.
 ## Develop
 
 ```sh
+npm ci               # install dependencies (Node 22.12+ or 24+)
+npm run dev          # local Vite server; URL printed in the terminal
+npm run build        # production site and published data in dist/
+npm run preview      # serve the production build locally
 npm run download:history # fetch Athlinks results for 2001–2025; preserve primary sources
 npm run download:supplemental # fetch Slush Cup, separate pro/junior lists, and category archives
 npm run download:splits # archive all available years' published split reports
 npm run build:data   # after changing raw data
 npm run audit:sources # refresh the offline source inventory after rebuilding data
-npm test             # Node's built-in test runner, no dependencies
+npm test             # statistics and React behavior tests
 python3 -m unittest discover -s tests -p 'test_*.py' # builder and downloader tests
-npm run serve        # http://localhost:8000/?bib=4026
 ```
 
 ## Publish
 
 The site is hosted on GitHub Pages at https://iceman.fueledbycaffeine.com.
-Configure Pages to deploy from `main` / root, with the custom domain
-`iceman.fueledbycaffeine.com` and HTTPS enforced. The root `CNAME` file preserves
-the domain across deployments.
+Configure GitHub Pages to use **GitHub Actions** as its source, with the custom domain
+`iceman.fueledbycaffeine.com` and HTTPS enforced. The deployment workflow builds
+the React app and copies the root `CNAME` into the published artifact. Only indexed
+results and split files are deployed; raw source archives remain in the repository.
 
 DNS: `iceman.fueledbycaffeine.com` is a CNAME pointing to `joshfriend.github.io`.
 Push changes to `main` to publish updates.

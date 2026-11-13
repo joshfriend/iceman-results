@@ -6,7 +6,7 @@ import {
   ageGenderFinishTimes, comparisonField, comparisonRank, divisionLabel, estimateNextWave, findRiders, findYearRiders, groupsFor, juniorCategoryStats, kde, parseRace,
   passCounts, passDistribution, proWaveStats, raceRecap, riderHistory, riderSplits, selectRaceEvent, waveDistributions, waveStats,
   winnerGaps,
-} from "../js/stats.js";
+} from "../src/stats/index.js";
 
 const readJson = (path) => JSON.parse(readFileSync(new URL(`../data/${path}`, import.meta.url)));
 const dataIndex = readJson("index.json");
@@ -538,7 +538,7 @@ test("2025 retains all primary divisions despite the less complete Athlinks divi
 });
 
 test("podium gaps handle historical ties and unavailable podium times", async () => {
-  const { podium } = await import("../js/stats.js");
+  const { podium } = await import("../src/stats/index.js");
   const rider = { division: "Example", divisionRank: 6, net: 200, finished: true };
   const tied = { ...rider, divisionRank: 4, net: 100 };
   const result = podium(rider, [tied, { ...tied }, rider], 5);
@@ -946,7 +946,7 @@ test("sorts matching names alphabetically without case sensitivity", () => {
 });
 
 test("podium gap is measured to the division's 5th place", async () => {
-  const { podium, duration, ordinal } = await import("../js/stats.js");
+  const { podium, duration, ordinal } = await import("../src/stats/index.js");
   assert.equal(race.podiumDepth, 5);
   const result = podium(josh, finishers, race.podiumDepth);
   const fifth = finishers.find((r) => r.division === "Men 35" && r.divisionRank === 5);
