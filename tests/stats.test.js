@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 import {
   ageGenderFinishTimes, comparisonField, comparisonRank, divisionLabel, estimateNextWave, findRiders, findYearRiders, groupsFor, juniorCategoryStats, kde, parseRace,
-  passCounts, passDistribution, proWaveStats, raceRecap, riderHistory, riderSplits, selectRaceEvent, waveDistributions, waveStats,
+  passCounts, passDistribution, passWaveExtremes, proWaveStats, raceRecap, riderHistory, riderSplits, selectRaceEvent, waveDistributions, waveStats,
   winnerGaps,
 } from "../src/stats/index.js";
 
@@ -583,6 +583,55 @@ test("pass counts agree with a brute-force definition", () => {
     const passedBy = others.filter((o) => o.start >= rider.start && o.clock < rider.clock).length;
     assert.deepEqual(passCounts(rider, finishers), { passed, passedBy, net: passed - passedBy });
   }
+});
+
+test("wave extremes filter only caught riders using each wave's finish-time fences", () => {
+  const rider = { wave: 10, start: 100, net: 200, clock: 300 };
+  const wave = (number, start, times, extra = {}) => times.map((net) =>
+    ({ wave: number, start, net, clock: start + net, ...extra }));
+  const field = [
+    rider,
+    ...wave(1, 0, [100, 100, 100, 100, 400]),
+    ...wave(3, 50, [100, 100, 150, 200, 350]),
+    ...wave(20, 150, [100, 100, 100, 100, 100]),
+    ...wave(30, 200, [20, 100, 100, 100, 100]),
+    ...wave(40, 250, [10], { wave: null }),
+    ...wave(50, 250, [10], { raceGroup: "pro" }),
+  ];
+  assert.deepEqual(passWaveExtremes(rider, field), { earliestCaught: 3, latestPassedBy: 30 });
+  assert.deepEqual(passWaveExtremes(rider, [rider, ...field.slice(1, 6)]),
+    { earliestCaught: null, latestPassedBy: null });
+  assert.deepEqual(passWaveExtremes({ ...rider, start: null }, field),
+    { earliestCaught: null, latestPassedBy: null });
+});
+
+test("wave extremes use start order, include same-wave passes and ignore ties and missing timing", () => {
+  const rider = { wave: 5, start: 100, net: 200, clock: 300 };
+  const field = [
+    rider,
+    { wave: 5, start: 100, net: 201, clock: 301 },
+    { wave: 5, start: 100, net: 199, clock: 299 },
+    { wave: 1, start: 50, net: 250, clock: 300 },
+    { wave: 2, start: null, net: 300, clock: 350 },
+    { wave: 3, start: 50, net: 300, clock: null },
+    { wave: 4, start: 50, net: 300, clock: 350, raceGroup: "junior" },
+  ];
+  assert.deepEqual(passWaveExtremes(rider, field), { earliestCaught: 5, latestPassedBy: 5 });
+  field.push({ wave: 8, start: 20, net: 400, clock: 420 });
+  field.push({ wave: 2, start: 200, net: 50, clock: 250 });
+  assert.deepEqual(passWaveExtremes(rider, field), { earliestCaught: 8, latestPassedBy: 2 });
+});
+
+test("pro riders have no earliest wave caught but retain unfiltered latest passing wave", () => {
+  const rider = { raceGroup: "pro", wave: 55, start: 100, net: 200, clock: 300 };
+  const field = [
+    rider,
+    { raceGroup: "pro", wave: 55, start: 100, net: 250, clock: 350 },
+    ...[50, 100, 100, 100, 100].map((net) =>
+      ({ raceGroup: "pro", wave: 56, start: 150, net, clock: 150 + net })),
+  ];
+  assert.deepEqual(passWaveExtremes(rider, field), { earliestCaught: null, latestPassedBy: 56 });
+  assert.deepEqual(passCounts(rider, field), { passed: 1, passedBy: 5, net: -4 });
 });
 
 test("pass distribution includes zeroes and ties, excludes missing timing, and separates fields", () => {

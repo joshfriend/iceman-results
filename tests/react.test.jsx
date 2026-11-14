@@ -104,6 +104,8 @@ describe("results explorer", () => {
     const row = await screen.findByRole("row", { name: /2026.*Pro men/ });
     expect(within(row).queryByText("Wave 55")).toBeNull();
     expect(screen.getByRole("columnheader", { name: "Wave / category" })).toBeTruthy();
+    expect(document.querySelector("#earliest-wave-caught")).toBeNull();
+    expect(document.querySelector("#latest-wave-passed-by")).toBeTruthy();
   }, 15000);
 
   it("shows the unassigned amateur field as a whisker distribution", async () => {
@@ -187,6 +189,8 @@ describe("results explorer", () => {
       expect(row.querySelectorAll(".wave-highlight-edge")).toHaveLength(2);
     }
     expect(document.querySelector("#pass-chart svg")).toBeTruthy();
+    expect(document.querySelector("#earliest-wave-caught").textContent).toBe("Earliest wave caught: Wave 23");
+    expect(document.querySelector("#latest-wave-passed-by").textContent).toBe("Latest wave to pass you: Wave 40");
     expect(screen.getByText("Wave eligibility / pace estimate")).toBeTruthy();
     const input = screen.getByRole("searchbox");
     fireEvent.change(input, { target: { value: "4763" } });
@@ -194,6 +198,8 @@ describe("results explorer", () => {
     expect(screen.getByRole("heading", { name: "Joel Lafrance" })).toBeTruthy();
     expect(document.querySelectorAll("#curves svg").length).toBeGreaterThan(0);
     expect(document.querySelector("#pass-chart svg")).toBeTruthy();
+    expect(document.querySelector("#earliest-wave-caught").textContent).toBe("Earliest wave caught: Wave 1");
+    expect(document.querySelector("#latest-wave-passed-by").textContent).toBe("Latest wave to pass you: None found");
     fireEvent.change(input, { target: { value: "1185" } });
     fireEvent.submit(input.closest("form"));
     expect(screen.getByRole("heading", { name: "Scott Dykema" })).toBeTruthy();

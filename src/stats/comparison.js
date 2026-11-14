@@ -1,3 +1,5 @@
+import { distributionStats } from "./distributions.js";
+
 export function comparisonField(rider, finishers) {
   return finishers.filter((other) => (other.raceGroup ?? "amateur") === (rider.raceGroup ?? "amateur"));
 }
@@ -38,6 +40,44 @@ export function passCounts(rider, finishers) {
     if (other.start >= rider.start && other.clock < rider.clock) passedBy++;
   }
   return { passed, passedBy, net: passed - passedBy };
+}
+
+export function passWaveExtremes(rider, finishers) {
+  const result = { earliestCaught: null, latestPassedBy: null };
+  if (!Number.isFinite(rider.start) || !Number.isFinite(rider.clock)) return result;
+
+  const field = comparisonField(rider, finishers);
+  const timesByWave = new Map();
+  for (const other of field) {
+    if (!Number.isInteger(other.wave) || !Number.isFinite(other.net) || other.net <= 0) continue;
+    if (!timesByWave.has(other.wave)) timesByWave.set(other.wave, []);
+    timesByWave.get(other.wave).push(other.net);
+  }
+  const fences = new Map([...timesByWave].map(([wave, times]) => {
+    const { lowerFence, upperFence } = distributionStats(times);
+    return [wave, { lowerFence, upperFence }];
+  }));
+  let earliestStart = Infinity;
+  let latestStart = -Infinity;
+  for (const other of field) {
+    if (other === rider || !Number.isInteger(other.wave)
+      || !Number.isFinite(other.start) || !Number.isFinite(other.clock)) continue;
+    const limits = fences.get(other.wave);
+    if (rider.raceGroup !== "pro" && other.start <= rider.start && other.clock > rider.clock && limits
+      && other.net >= limits.lowerFence && other.net <= limits.upperFence
+      && (other.start < earliestStart
+        || (other.start === earliestStart && other.wave < result.earliestCaught))) {
+      earliestStart = other.start;
+      result.earliestCaught = other.wave;
+    }
+    if (other.start >= rider.start && other.clock < rider.clock
+      && (other.start > latestStart
+        || (other.start === latestStart && other.wave > result.latestPassedBy))) {
+      latestStart = other.start;
+      result.latestPassedBy = other.wave;
+    }
+  }
+  return result;
 }
 
 export function passDistribution(rider, finishers) {

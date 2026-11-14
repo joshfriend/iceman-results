@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { estimateNextWave, hms, passCounts, waveDistributions, winnerGaps } from "../stats/index.js";
+import { estimateNextWave, hms, passCounts, passWaveExtremes, waveDistributions, winnerGaps } from "../stats/index.js";
 import { createRiderCharts } from "../charts/riderCharts.js";
 import { Facts, fmt } from "./common.jsx";
 import { WaveEstimate } from "./WaveEstimate.jsx";
@@ -14,12 +14,15 @@ function WinnerGaps({ rider, data }) {
   </section>;
 }
 
-function Passing({ counts }) {
+function Passing({ rider, counts, waveExtremes }) {
   return <section id="passes" className="passes" aria-label="Passing">
     <div className="tile passed"><span className="tile-label">You passed</span><span id="passed" className="tile-value">{fmt(counts.passed)}</span>
-      <span className="tile-note">started with or before you, finished after you</span></div>
+      <span className="tile-note">started with or before you, finished after you</span>
+      {rider.raceGroup !== "pro" && <span id="earliest-wave-caught" className="tile-note">Earliest wave caught: {waveExtremes.earliestCaught === null ? "None found" : `Wave ${waveExtremes.earliestCaught}`}</span>}</div>
     <div className="tile passed-by"><span className="tile-label">Passed you</span><span id="passed-by" className="tile-value">{fmt(counts.passedBy)}</span>
-      <span className="tile-note">started with or after you, finished before you</span></div>
+      <span className="tile-note">started with or after you, finished before you</span>
+      <span id="latest-wave-passed-by" className="tile-note">Latest wave to pass you: {waveExtremes.latestPassedBy === null ? "None found" : `Wave ${waveExtremes.latestPassedBy}`}</span>
+    </div>
     <div className="tile net"><span className="tile-label">Net</span><span id="net" className="tile-value">{counts.net > 0 ? "+" : ""}{fmt(counts.net)}</span>
       <span className="tile-note">positions gained during the race</span></div>
     <div id="pass-distribution" className="tile" aria-labelledby="pass-distribution-title">
@@ -52,6 +55,7 @@ export function RiderDetails({ rider, data, raceHistory, hasRiderWave }) {
   const root = useRef(null);
   const waves = useMemo(() => waveDistributions(rider, data.finishers, data.race), [rider, data]);
   const counts = useMemo(() => hasRiderWave ? passCounts(rider, data.finishers) : null, [rider, data, hasRiderWave]);
+  const waveExtremes = useMemo(() => hasRiderWave ? passWaveExtremes(rider, data.finishers) : null, [rider, data, hasRiderWave]);
   const estimate = hasRiderWave
     ? estimateNextWave(rider, raceHistory, waves.filter((wave) => wave.kind !== "pro"), data.race) : null;
 
@@ -66,7 +70,7 @@ export function RiderDetails({ rider, data, raceHistory, hasRiderWave }) {
 
   return <div id="details" ref={root}>
     <WinnerGaps rider={rider} data={data} />
-    {counts && <Passing counts={counts} />}
+    {counts && <Passing rider={rider} counts={counts} waveExtremes={waveExtremes} />}
     <FinishTimes />
     <WaveEstimate estimate={estimate} data={data} />
     {waves.length > 0 && <WaveResults />}
