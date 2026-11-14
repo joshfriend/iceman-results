@@ -46,6 +46,12 @@ are rebuilt outputs. Do not infer a separate junior event from a junior age divi
 Speed and course-distance values should reflect published source data when possible;
 the builder applies documented fallbacks when sources omit them.
 
+Use `resultOverrides` in `race.json` for an intentional correction to a result's status.
+Each entry identifies one result by `bib` and sets `status` to `DNF`, `DNS`, or `DSQ`.
+The builder rejects missing or duplicate bib matches and clears finish-only values.
+Overrides are retained in the generated race data's `dataSources`; raw source files
+remain unchanged.
+
 ## Supplemental organizer data
 
 Normalize public organizer exports to CSV in the year's `raw/` directory, then add a

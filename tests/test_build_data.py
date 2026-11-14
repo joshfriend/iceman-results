@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts.build_data import (
-    apply_split_distances, athlinks_divisions, athlinks_race_group, athlinks_speed, build_year, FIELDS, monotonic_splits, parse_athlinks,
+    apply_result_overrides, apply_split_distances, athlinks_divisions, athlinks_race_group, athlinks_speed, build_year, FIELDS, monotonic_splits, parse_athlinks,
     raceresult_splits, registericeman_splits,
     parse_metadata_csv, parse_raceresult, parse_registericeman, parse_runmichigan,
     parse_start_list, parse_wave_placements, published_age, published_speed, race_group,
@@ -387,6 +387,27 @@ class SupplementalResultsTests(unittest.TestCase):
         ):
             with self.subTest(division=division):
                 self.assertEqual(race_group({"division": division, "age": age}), expected)
+
+
+class ResultOverrideTests(unittest.TestCase):
+    def test_dnf_override_clears_finish_only_values(self):
+        rider = {
+            "bib": 4949, "status": 3709, "net": 31688, "avgSpeed": 3.5,
+            "genderRank": 1, "divisionRank": 1,
+        }
+        apply_result_overrides([rider], [{"bib": 4949, "status": "DNF"}], "test")
+        self.assertEqual(rider["status"], "DNF")
+        for field in ("net", "avgSpeed", "genderRank", "divisionRank"):
+            self.assertIsNone(rider[field])
+
+    def test_override_requires_one_matching_bib(self):
+        for riders, overrides, message in (
+            ([], [{"bib": 1, "status": "DNF"}], "no unique result"),
+            ([{"bib": 1}, {"bib": 1}], [{"bib": 1, "status": "DNF"}], "no unique result"),
+            ([{"bib": 1}], [{"bib": 1, "status": "FIN"}], "invalid result override status"),
+        ):
+            with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+                apply_result_overrides(riders, overrides, "test")
 
 
 class MetadataTests(unittest.TestCase):

@@ -869,6 +869,29 @@ def apply_split_distances(courses, config, riders):
         course["estimated"] = True
 
 
+def apply_result_overrides(riders, overrides, source):
+    seen_bibs = set()
+    for override in overrides:
+        if not isinstance(override, dict) or set(override) != {"bib", "status"}:
+            raise ValueError(f"{source}: result overrides require bib and status")
+        bib, status = override["bib"], override["status"]
+        if not isinstance(bib, int) or isinstance(bib, bool) or bib <= 0:
+            raise ValueError(f"{source}: invalid result override bib {bib!r}")
+        if not isinstance(status, str) or status not in {"DNF", "DNS", "DSQ"}:
+            raise ValueError(f"{source}: invalid result override status {status!r}")
+        if bib in seen_bibs:
+            raise ValueError(f"{source}: repeated result override for bib {bib}")
+        seen_bibs.add(bib)
+        candidates = [rider for rider in riders if str(rider["bib"]) == str(bib)]
+        if len(candidates) != 1:
+            raise ValueError(f"{source}: no unique result for override bib {bib}")
+        rider = candidates[0]
+        rider.update(
+            status=status, net=None, avgSpeed=None,
+            genderRank=None, divisionRank=None,
+        )
+
+
 def build_splits(folder, config, riders):
     """Return the year's checkpoint times for riders in results.json, or None when none were published."""
     bibs = {rider[FIELDS.index("bib")] for rider in riders}
@@ -995,6 +1018,9 @@ def build_year(folder):
             parse_wave_placements(folder / wave_placements["path"]),
             "wavePlacements",
         )
+    result_overrides = config.get("resultOverrides", [])
+    if result_overrides:
+        apply_result_overrides(parsed_results, result_overrides, "resultOverrides")
 
     riders = []
     for r in parsed_results:
@@ -1093,6 +1119,7 @@ def build_year(folder):
             "riderMetadata": config.get("riderMetadata", []),
             **({"wavePlacements": wave_placements} if wave_placements else {}),
             **({"waveSchedule": wave_schedule} if wave_schedule else {}),
+            **({"resultOverrides": result_overrides} if result_overrides else {}),
         },
         "metadataCoverage": metadata_coverage,
     }

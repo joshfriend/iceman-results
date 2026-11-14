@@ -485,13 +485,14 @@ test("loads every result row", () => {
 
 test("loads 2025 Registericeman results, retaining finishers whose wave is unavailable", () => {
   assert.equal(riders2025.length, 4178);
-  assert.equal(finishers2025.length, 4067);
+  assert.equal(finishers2025.length, 4066);
   assert.ok(finishers2025.every((r) => r.net !== null));
   assert.equal(finishers2025.filter((r) => r.wave !== null).length, 3708);
-  const noCorralFinisher = riders2025.find((r) => r.bib === 4949);
-  assert.equal(noCorralFinisher.status, 3709);
-  assert.equal(noCorralFinisher.wave, null);
-  assert.equal(noCorralFinisher.start, null);
+  const noCorralResult = riders2025.find((r) => r.bib === 4949);
+  assert.equal(noCorralResult.status, "DNF");
+  assert.equal(noCorralResult.net, null);
+  assert.equal(noCorralResult.wave, null);
+  assert.equal(noCorralResult.start, null);
   assert.equal(riders2025.find((r) => r.bib === 481).status, "DSQ");
 });
 
@@ -706,20 +707,28 @@ test("amateur wave stats cover 45 waves, with junior/pro starts separate", () =>
 });
 
 test("amateur finishers without wave assignments get a combined distribution", () => {
-  for (const year of [2016, 2025]) {
-    const data = parseIceman(`${year}/results.json`);
-    const rider = data.finishers.find((r) => r.raceGroup === "amateur");
-    const unassigned = data.finishers.filter((r) =>
-      (r.raceGroup ?? "amateur") === "amateur" && !Number.isInteger(r.wave));
-    const row = waveDistributions(rider, data.finishers, data.race)
-      .find((distribution) => distribution.kind === "amateur-unassigned");
-    assert.ok(row, `${year}: unassigned amateur distribution`);
-    assert.equal(row.label, "Amateur (unknown)");
-    assert.equal(row.wave, null);
-    assert.equal(row.start, null);
-    assert.equal(row.n, unassigned.length);
-    assert.deepEqual(row.times, unassigned.map((r) => r.net));
-  }
+  const historical = parseIceman("2016/results.json");
+  const historicalAmateur = historical.finishers.find((r) => r.raceGroup === "amateur");
+  const historicalUnassigned = historical.finishers.filter((r) =>
+    (r.raceGroup ?? "amateur") === "amateur" && !Number.isInteger(r.wave));
+  const historicalRow = waveDistributions(
+    historicalAmateur, historical.finishers, historical.race,
+  ).find((distribution) => distribution.kind === "amateur-unassigned");
+  assert.ok(historicalRow, "2016: unassigned amateur distribution");
+  assert.equal(historicalRow.label, "Amateur (unknown)");
+  assert.equal(historicalRow.wave, null);
+  assert.equal(historicalRow.start, null);
+  assert.equal(historicalRow.n, historicalUnassigned.length);
+  assert.deepEqual(historicalRow.times, historicalUnassigned.map((r) => r.net));
+
+  const current = parseIceman("2025/results.json");
+  assert.equal(current.finishers.filter((r) =>
+    r.raceGroup === "amateur" && !Number.isInteger(r.wave)).length, 0);
+  assert.equal(waveDistributions(
+    current.finishers.find((r) => r.raceGroup === "amateur"),
+    current.finishers,
+    current.race,
+  ).some((distribution) => distribution.kind === "amateur-unassigned"), false);
 });
 
 test("junior categories are appended after pro and amateur wave distributions", () => {
