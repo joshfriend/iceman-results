@@ -123,7 +123,7 @@ function drawCurves(rider) {
     svg.append("g").selectAll("rect").data(bins).join("rect")
       .attr("x", (b) => x(b.x0) + 0.5).attr("width", (b) => Math.max(0, x(b.x1) - x(b.x0) - 1))
       .attr("y", (b) => y(binDensity(b))).attr("height", (b) => y(0) - y(binDensity(b)))
-      .attr("fill", "#92a5b5").attr("opacity", 0.16);
+      .attr("fill", COLORS.histogram).attr("opacity", 0.16);
 
     const points = xs.map((xv, j) => [xv, density[j]]);
     const at = d3.bisector((p) => p[0]).left(points, mine);
@@ -208,7 +208,7 @@ function drawWaves(rider) {
   head.plot.attr("role", "img")
     .attr("aria-label", `Start group, start, finishers and median columns; your finish ${hms(rider.net)}`);
   body.plot.attr("role", "img")
-    .attr("aria-label", "Finish time distributions by start group, including pro men and pro women");
+    .attr("aria-label", "Finish time distributions by start group or category, including unassigned amateur finishers");
   axis.plot.attr("role", "img").attr("aria-label", "Finish time axis in hours and minutes");
 
   body.plot.append("g").selectAll("line").data(ticks).join("line")
@@ -222,13 +222,17 @@ function drawWaves(rider) {
   headerStats.append("text").attr("x", 18).attr("y", 18).text("FINISHERS");
   headerStats.append("text").attr("x", 96).attr("y", 18).text("MEDIAN");
 
-  waves.forEach((w, i) => {
-    const mineRow = w.kind === "pro"
-      ? rider.raceGroup === "pro" && rider.gender === w.gender
-      : w.kind === "junior"
-        ? rider.raceGroup === "junior"
-          && (rider.division || `Junior ${rider.gender === "F" ? "women" : "men"}`) === w.division
+  const isRiderRow = (w) => w.kind === "pro"
+    ? rider.raceGroup === "pro" && rider.gender === w.gender
+    : w.kind === "junior"
+      ? rider.raceGroup === "junior"
+        && (rider.division || `Junior ${rider.gender === "F" ? "women" : "men"}`) === w.division
+      : w.kind === "amateur-unassigned"
+        ? rider.raceGroup === "amateur" && !Number.isInteger(rider.wave)
         : rider.raceGroup === "amateur" && w.wave === rider.wave;
+
+  waves.forEach((w, i) => {
+    const mineRow = isRiderRow(w);
     const color = mineRow ? COLORS.accent : COLORS.blue;
     const cy = rowY(i);
     const rowName = w.label ?? `Wave ${w.wave}`;
@@ -243,34 +247,54 @@ function drawWaves(rider) {
       const group = svg.append("g").attr("class", mineRow ? "wave-highlight" : null);
       group.append("title").text(summary);
       if (mineRow || i % 2 === 0) {
-        group.append("rect").attr("x", 0).attr("width", "100%").attr("y", cy - rowH / 2 + 0.5).attr("height", rowH - 1)
-          .attr("fill", mineRow ? COLORS.accent : COLORS.band).attr("opacity", mineRow ? 0.1 : 1);
+        group.append("rect").attr("class", "wave-row-background")
+          .attr("x", 0).attr("width", "100%").attr("y", cy - rowH / 2 + 0.5).attr("height", rowH - 1)
+          .attr("fill", mineRow ? COLORS.waveHighlight : COLORS.band);
+      }
+      if (mineRow) {
+        for (const y of [cy - rowH / 2 + 0.5, cy + rowH / 2 - 0.5]) {
+          group.append("line").attr("class", "wave-highlight-edge")
+            .attr("x1", 0).attr("x2", "100%").attr("y1", y).attr("y2", y)
+            .attr("stroke", COLORS.accent).attr("stroke-opacity", 0.65);
+        }
       }
       return group;
     });
+    if (mineRow) {
+      leftRow.append("rect").attr("x", 0).attr("y", cy - rowH / 2).attr("width", 3)
+        .attr("height", rowH).attr("fill", COLORS.accent);
+    }
     const lo = x(w.whiskerMin / 60);
     const hi = x(w.whiskerMax / 60);
     const isOutlier = (t) => t < w.lowerFence || t > w.upperFence;
-    row.append("line").attr("x1", lo).attr("x2", hi).attr("y1", cy).attr("y2", cy)
-      .attr("stroke", COLORS.range).attr("stroke-width", 0.9);
-    for (const end of [lo, hi]) {
-      row.append("line").attr("x1", end).attr("x2", end).attr("y1", cy - 2.5).attr("y2", cy + 2.5)
-        .attr("stroke", COLORS.range).attr("stroke-width", 0.9);
-    }
+    const aggregate = w.kind === "amateur-unassigned";
     row.append("g").selectAll("circle").data(w.times).join("circle")
+      .attr("class", "wave-finisher")
       .attr("cx", (t) => x(t / 60)).attr("cy", () => cy + (random() - 0.5) * rowH * 0.56)
-      .attr("r", 1.6)
+      .attr("r", aggregate ? 1.1 : 1.6)
       .attr("fill", (t) => isOutlier(t) ? "none" : color)
       .attr("stroke", (t) => isOutlier(t) ? color : "none")
       .attr("stroke-width", 0.7)
-      .attr("opacity", 0.3)
+      .attr("opacity", aggregate ? 0.08 : 0.3)
       .append("title").text((t) => `${rowName} · ${hms(t)}${isOutlier(t)
-        ? " · Outlier: outside this start group's 1.5×IQR fences" : ""}`);
+        ? " · Outlier: outside this group's 1.5×IQR fences" : ""}`);
+    row.append("line").attr("class", "wave-whisker")
+      .attr("x1", lo).attr("x2", hi).attr("y1", cy).attr("y2", cy)
+      .attr("stroke", COLORS.range).attr("stroke-width", aggregate ? 1.5 : 0.9);
+    for (const end of [lo, hi]) {
+      row.append("line").attr("class", "wave-whisker")
+        .attr("x1", end).attr("x2", end).attr("y1", cy - 2.5).attr("y2", cy + 2.5)
+        .attr("stroke", COLORS.range).attr("stroke-width", aggregate ? 1.5 : 0.9);
+    }
     row.append("rect")
+      .attr("class", "wave-box")
       .attr("x", x(w.q1 / 60)).attr("width", x(w.q3 / 60) - x(w.q1 / 60))
       .attr("y", cy - rowH * 0.24).attr("height", rowH * 0.48)
-      .attr("fill", color).attr("fill-opacity", 0.25).attr("stroke", color).attr("stroke-opacity", 0.5);
-    row.append("line").attr("x1", x(w.median / 60)).attr("x2", x(w.median / 60))
+      .attr("fill", color).attr("fill-opacity", aggregate ? 0.32 : 0.25)
+      .attr("stroke", color).attr("stroke-opacity", aggregate ? 0.9 : 0.5)
+      .attr("stroke-width", aggregate ? 1.2 : 1);
+    row.append("line").attr("class", "wave-median")
+      .attr("x1", x(w.median / 60)).attr("x2", x(w.median / 60))
       .attr("y1", cy - rowH * 0.26).attr("y2", cy + rowH * 0.26)
       .attr("stroke", COLORS.ink).attr("stroke-width", 2.2);
 
@@ -296,15 +320,10 @@ function drawWaves(rider) {
   body.plot.append("line").attr("x1", mine).attr("x2", mine)
     .attr("y1", 0).attr("y2", height)
     .attr("stroke", COLORS.red).attr("stroke-width", 1.4).attr("stroke-dasharray", "6 4");
-  const myRow = waves.findIndex((w) => w.kind === "pro"
-    ? rider.raceGroup === "pro" && rider.gender === w.gender
-    : w.kind === "junior"
-      ? rider.raceGroup === "junior"
-        && (rider.division || `Junior ${rider.gender === "F" ? "women" : "men"}`) === w.division
-      : rider.raceGroup === "amateur" && w.wave === rider.wave);
+  const myRow = waves.findIndex(isRiderRow);
   if (myRow >= 0) {
     body.plot.append("circle").attr("cx", mine).attr("cy", rowY(myRow)).attr("r", 5)
-      .attr("fill", COLORS.red).attr("stroke", "#fff").attr("stroke-width", 1.2);
+      .attr("fill", COLORS.red).attr("stroke", COLORS.surface).attr("stroke-width", 1.2);
   }
   const nearEnd = mine > plotWidth - 100;
   head.plot.append("text").attr("x", nearEnd ? mine - 6 : mine + 6).attr("y", margin.top - 8)

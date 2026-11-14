@@ -1,6 +1,7 @@
 # Iceman Cometh Results
 
 An interactive explorer for Iceman Cometh race results, rider history, and checkpoint splits.
+The site follows your device's light or dark appearance preference.
 
 Browse the site at [iceman.fueledbycaffeine.com](https://iceman.fueledbycaffeine.com).
 

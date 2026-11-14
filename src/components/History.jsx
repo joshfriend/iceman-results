@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { divisionLabel, duration, hms, ordinal, podium, riderHistory } from "../stats/index.js";
+import { divisionLabel, duration, hms, ordinal, podium, proCategoryLabel, riderHistory } from "../stats/index.js";
 import { createHistoryCharts } from "../charts/historyCharts.js";
 import { AWARDS, capitalize, fmt, Trophy } from "./common.jsx";
 
@@ -60,7 +60,7 @@ export function History({ rider, data, eventYears, loader, raceUrl, searchVersio
     <div id="history-charts" className="curves"></div>
     <div className="scroll-x">
       <table id="history-table" className="history-table" hidden={!results.length}>
-        <thead><tr><th scope="col">Year</th><th scope="col">Wave</th><th scope="col">Finish / avg speed</th>
+        <thead><tr><th scope="col">Year</th><th scope="col">Wave / category</th><th scope="col">Finish / avg speed</th>
           <th scope="col">Time change</th><th scope="col">Field place</th><th scope="col">Ahead of field</th></tr></thead>
         <tbody id="history-rows">{results.map((result) => {
           const yearData = yearsByYear.get(result.year);
@@ -75,7 +75,11 @@ export function History({ rider, data, eventYears, loader, raceUrl, searchVersio
               {award && <> <span className="podium-mark" title={`${ordinal(place.place)} place in ${divisionLabel(result.rider)}`}>
                 <Trophy color={award.color} label="" /><span>{ordinal(place.place)}</span></span></>}
             </th>
-            <td>{result.rider.wave ? `Wave ${result.rider.wave}` : "—"}</td>
+            <td>{result.rider.wave
+              ? result.rider.raceGroup === "pro"
+                ? proCategoryLabel(result.rider.gender) ?? `Wave ${result.rider.wave}`
+                : `Wave ${result.rider.wave}`
+              : "—"}</td>
             <td>{result.net === null ? String(result.rider.status) : `${hms(result.net)}${Number.isFinite(result.rider.speed)
               ? ` · ${result.rider.speed.toFixed(1)} mph` : ""}`}</td>
             <td>{change === null ? "—" : change === 0 ? "No change"

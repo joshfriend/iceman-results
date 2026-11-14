@@ -1,8 +1,9 @@
 import * as d3 from "d3";
 
 export const COLORS = {
-  blue: "#8295a8", accent: "#1476c8", slower: "#328c79", red: "#ca453d", ink: "#203346",
-  muted: "#657584", grid: "#e8edf0", band: "#f6f8fa", range: "#acbac5",
+  blue: "var(--blue)", accent: "var(--accent)", slower: "var(--slower)", red: "var(--red)",
+  ink: "var(--ink)", muted: "var(--muted)", band: "var(--band)", range: "var(--range)",
+  surface: "var(--surface)", histogram: "var(--histogram)", waveHighlight: "var(--wave-highlight)",
 };
 
 export const fmt = d3.format(",");

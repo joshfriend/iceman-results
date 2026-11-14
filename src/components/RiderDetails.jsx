@@ -44,7 +44,7 @@ function WaveResults() {
     <div id="wave-rows" tabIndex="0" role="region" aria-label="Start group chart rows" aria-describedby="wave-scroll-note">
       <div id="wave-header"></div><div id="wave-rows-content"></div><div id="wave-axis"></div>
     </div></div></div>
-    <p id="wave-scroll-note" className="footnote">Scroll the rows to compare start groups; your group starts centered when space allows. Scroll right to see the slowest finishes beyond 2×IQR.</p>
+    <p id="wave-scroll-note" className="footnote">Scroll the rows to compare start groups; your group starts centered when space allows. Scroll right to see the slowest finishes beyond 2×IQR. Amateur finishers without a wave assignment are summarized together.</p>
   </section>;
 }
 

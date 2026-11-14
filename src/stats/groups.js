@@ -3,6 +3,11 @@ import { agesCompatible, identityMatches } from "./identity.js";
 import { distributionStats, median } from "./distributions.js";
 import { clockTime } from "./format.js";
 
+const PRO_CATEGORIES = [
+  { gender: "M", label: "Pro men" },
+  { gender: "F", label: "Pro women" },
+];
+
 function summarize(key, title, members, rider, officialRank) {
   const times = members.map((r) => r.net);
   const faster = times.filter((t) => t < rider.net).length;
@@ -93,10 +98,7 @@ export function waveStats(finishers, race) {
 }
 
 export function proWaveStats(finishers) {
-  return [
-    { gender: "M", label: "Pro men" },
-    { gender: "F", label: "Pro women" },
-  ].flatMap(({ gender, label }) => {
+  return PRO_CATEGORIES.flatMap(({ gender, label }) => {
     const members = finishers.filter((r) => r.raceGroup === "pro" && r.gender === gender);
     if (!members.length) return [];
     return [{
@@ -108,6 +110,10 @@ export function proWaveStats(finishers) {
       ...distributionStats(members.map((r) => r.net)),
     }];
   });
+}
+
+export function proCategoryLabel(gender) {
+  return PRO_CATEGORIES.find((category) => category.gender === gender)?.label ?? null;
 }
 
 export function juniorCategoryStats(finishers) {
@@ -131,9 +137,17 @@ export function juniorCategoryStats(finishers) {
 
 export function waveDistributions(rider, finishers, race) {
   const amateurField = finishers.filter((other) => (other.raceGroup ?? "amateur") === "amateur");
+  const unassignedAmateurs = amateurField.filter((other) => !Number.isInteger(other.wave));
   return [
     ...proWaveStats(finishers),
     ...waveStats(amateurField, race),
+    ...(unassignedAmateurs.length ? [{
+      kind: "amateur-unassigned",
+      label: "Amateur (unknown)",
+      wave: null,
+      start: null,
+      ...distributionStats(unassignedAmateurs.map((other) => other.net)),
+    }] : []),
     ...juniorCategoryStats(finishers),
   ];
 }

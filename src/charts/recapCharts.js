@@ -227,7 +227,7 @@ function drawCourseDistanceHistory() {
     svg.append("g").selectAll("circle").data(points).join("circle")
       .attr("cx", (entry) => x(entry.year)).attr("cy", (entry) => y(entry.courseDistance))
       .attr("r", 4).attr("stroke", COLORS.accent).attr("stroke-width", 2)
-      .attr("fill", (entry) => entry.courseDistanceEstimated ? "#fff" : COLORS.accent);
+      .attr("fill", (entry) => entry.courseDistanceEstimated ? COLORS.surface : COLORS.accent);
     addChartTooltip(container, svg, points.map((entry) => ({
       x: x(entry.year),
       header: String(entry.year),

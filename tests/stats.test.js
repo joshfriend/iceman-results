@@ -656,6 +656,23 @@ test("amateur wave stats cover 45 waves, with junior/pro starts separate", () =>
   assert.equal(w29.median, 9940.5);
 });
 
+test("amateur finishers without wave assignments get a combined distribution", () => {
+  for (const year of [2016, 2025]) {
+    const data = parseIceman(`${year}/results.json`);
+    const rider = data.finishers.find((r) => r.raceGroup === "amateur");
+    const unassigned = data.finishers.filter((r) =>
+      (r.raceGroup ?? "amateur") === "amateur" && !Number.isInteger(r.wave));
+    const row = waveDistributions(rider, data.finishers, data.race)
+      .find((distribution) => distribution.kind === "amateur-unassigned");
+    assert.ok(row, `${year}: unassigned amateur distribution`);
+    assert.equal(row.label, "Amateur (unknown)");
+    assert.equal(row.wave, null);
+    assert.equal(row.start, null);
+    assert.equal(row.n, unassigned.length);
+    assert.deepEqual(row.times, unassigned.map((r) => r.net));
+  }
+});
+
 test("junior categories are appended after pro and amateur wave distributions", () => {
   const junior = riders.find((r) => r.bib === 6258);
   const waves = waveDistributions(junior, finishers, race);

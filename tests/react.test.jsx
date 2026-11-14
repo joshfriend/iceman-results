@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import App from "../src/App.jsx";
 import { chartScope } from "../src/charts/scope.js";
+import { COLORS } from "../src/charts/shared.js";
 
 class ResizeObserverStub {
   observe() {}
@@ -32,6 +33,27 @@ afterEach(() => {
 });
 
 describe("results explorer", () => {
+  it("defines every chart color for both system themes", async () => {
+    const style = document.createElement("style");
+    style.textContent = await readFile("style.css", "utf8");
+    document.head.append(style);
+    try {
+      const rules = Array.from(style.sheet.cssRules);
+      const light = rules.find((rule) => rule.selectorText === ":root");
+      const dark = Array.from(rules.find((rule) =>
+        rule.conditionText === "(prefers-color-scheme: dark)").cssRules)
+        .find((rule) => rule.selectorText === ":root");
+      for (const color of Object.values(COLORS)) {
+        const name = color.match(/^var\((--[^)]+)\)$/)?.[1];
+        expect(name).toBeTruthy();
+        expect(light.style.getPropertyValue(name)).toBeTruthy();
+        expect(dark.style.getPropertyValue(name)).toBeTruthy();
+      }
+    } finally {
+      style.remove();
+    }
+  });
+
   it("only removes the shared tooltip when the recap charts are destroyed", () => {
     const root = document.createElement("div");
     const tooltip = document.createElement("div");
@@ -62,6 +84,35 @@ describe("results explorer", () => {
     fireEvent.change(input, { target: { value: "" } });
     expect(screen.getByRole("heading", { name: "2026 race recap" })).toBeTruthy();
     expect(window.location.search).toBe("?year=2026");
+  }, 15000);
+
+  it("shows a known pro wave's category in rider history", async () => {
+    window.history.replaceState(null, "", "/?year=2026&bib=64");
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Trey Shepard" })).toBeTruthy();
+    const row = await screen.findByRole("row", { name: /2026.*Pro men/ });
+    expect(within(row).queryByText("Wave 55")).toBeNull();
+    expect(screen.getByRole("columnheader", { name: "Wave / category" })).toBeTruthy();
+  }, 15000);
+
+  it("shows the unassigned amateur field as a whisker distribution", async () => {
+    window.history.replaceState(null, "", "/?year=2016&bib=2200");
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Ryan Stephen" })).toBeTruthy();
+    const row = document.querySelector("#wave-rows-content .wave-plot .wave-highlight");
+    expect(row.querySelector("title").textContent).toContain("Amateur (unknown)");
+    expect(row.querySelector("title").textContent).toContain("3,680 finishers");
+    const dots = row.querySelectorAll("circle.wave-finisher");
+    expect(dots).toHaveLength(3680);
+    expect(dots[0].getAttribute("r")).toBe("1.1");
+    expect(dots[0].getAttribute("opacity")).toBe("0.08");
+    expect(row.querySelector(".wave-box")).toBeTruthy();
+    expect(row.querySelectorAll(".wave-whisker")).toHaveLength(3);
+    expect(row.querySelector(".wave-median")).toBeTruthy();
+    expect(row.querySelector(".wave-box").compareDocumentPosition(dots[0]) & Node.DOCUMENT_POSITION_PRECEDING)
+      .toBeTruthy();
+    expect(document.querySelectorAll("#wave-rows-content .wave-plot svg > circle")).toHaveLength(1);
+    expect(screen.getByText(/without a wave assignment are summarized together/)).toBeTruthy();
   }, 15000);
 
   it("shows multiple matches and reports missing bibs", async () => {
@@ -117,6 +168,13 @@ describe("results explorer", () => {
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Matt Huisman" })).toBeTruthy();
     expect(document.querySelectorAll("#curves svg").length).toBeGreaterThan(0);
+    expect(document.querySelector('#curves [stroke="var(--ink)"]')).toBeTruthy();
+    const highlightedRows = document.querySelectorAll("#wave-rows-content .wave-highlight");
+    expect(highlightedRows).toHaveLength(3);
+    for (const row of highlightedRows) {
+      expect(row.querySelector(".wave-row-background").getAttribute("fill")).toBe("var(--wave-highlight)");
+      expect(row.querySelectorAll(".wave-highlight-edge")).toHaveLength(2);
+    }
     expect(document.querySelector("#pass-chart svg")).toBeTruthy();
     expect(screen.getByText("Wave eligibility / pace estimate")).toBeTruthy();
     const input = screen.getByRole("searchbox");

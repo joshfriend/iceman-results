@@ -5,4 +5,4 @@ export { riderSplits } from "./splits.js";
 export { ordinal, duration, hms, hm, clockTime } from "./format.js";
 export { median, populationSd, kde } from "./distributions.js";
 export { ageGenderFinishTimes, raceRecap } from "./recap.js";
-export { divisionLabel, groupsFor, waveStats, proWaveStats, juniorCategoryStats, waveDistributions, estimateNextWave } from "./groups.js";
+export { divisionLabel, groupsFor, waveStats, proWaveStats, proCategoryLabel, juniorCategoryStats, waveDistributions, estimateNextWave } from "./groups.js";
