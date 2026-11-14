@@ -68,7 +68,7 @@ describe("results explorer", () => {
   it("searches, shows a rider report and history, and returns to the recap", async () => {
     render(<App />);
     expect(await screen.findByRole("heading", { name: "2026 race recap" })).toBeTruthy();
-    const input = screen.getByRole("searchbox", { name: "Bib number or name" });
+    const input = screen.getByRole("searchbox", { name: "Bib number, name, or city/state" });
     fireEvent.change(input, { target: { value: "2798" } });
     fireEvent.submit(input.closest("form"));
     expect(await screen.findByRole("heading", { name: "Matt Huisman" })).toBeTruthy();
@@ -84,6 +84,17 @@ describe("results explorer", () => {
     fireEvent.change(input, { target: { value: "" } });
     expect(screen.getByRole("heading", { name: "2026 race recap" })).toBeTruthy();
     expect(window.location.search).toBe("?year=2026");
+  }, 15000);
+
+  it("searches riders by city and state", async () => {
+    render(<App />);
+    const input = await screen.findByRole("searchbox", { name: "Bib number, name, or city/state" });
+    fireEvent.change(input, { target: { value: "Lowell MI" } });
+    fireEvent.submit(input.closest("form"));
+    expect(screen.getByRole("status").textContent).toMatch(/riders match/);
+    const matches = Array.from(document.querySelectorAll("#matches button"));
+    expect(matches.length).toBeGreaterThan(0);
+    expect(matches.every((button) => button.textContent.includes("Lowell, MI"))).toBe(true);
   }, 15000);
 
   it("shows a known pro wave's category in rider history", async () => {
@@ -117,7 +128,7 @@ describe("results explorer", () => {
 
   it("shows multiple matches and reports missing bibs", async () => {
     render(<App />);
-    const input = await screen.findByRole("searchbox", { name: "Bib number or name" });
+    const input = await screen.findByRole("searchbox", { name: "Bib number, name, or city/state" });
     fireEvent.change(input, { target: { value: "smith" } });
     fireEvent.submit(input.closest("form"));
     expect(screen.getByRole("status").textContent).toMatch(/riders match/);

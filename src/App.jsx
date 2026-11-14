@@ -28,11 +28,11 @@ function RacePage({ index, raceKey, eventInfo, entry, data, loader, raceHistory 
         ? data.riders.some((item) => Number.isInteger(item.bib))
           ? `No rider with bib ${value.trim()} in the results.`
           : "Bib numbers are not listed for this year; search by rider name instead."
-        : `No rider named “${value.trim()}” in the results.`);
+        : `No rider or location matching “${value.trim()}” in the results.`);
       setError(true);
     } else if (found.length > 1) {
       setMessage(found.length > 30
-        ? `${fmt(found.length)} riders match — showing the first 30, type more of the name to narrow it:`
+        ? `${fmt(found.length)} riders match — showing the first 30, type more to narrow it:`
         : `${fmt(found.length)} riders match — pick one:`);
     } else {
       const selected = found[0];
@@ -122,8 +122,8 @@ function RacePage({ index, raceKey, eventInfo, entry, data, loader, raceHistory 
         <form id="lookup" className="lookup" autoComplete="off" onSubmit={(event) => {
           event.preventDefault();
           if (query.trim()) lookup(query); else reset();
-        }}><label htmlFor="query">Bib number or name</label><div className="lookup-row">
-          <input id="query" name="query" type="search" inputMode="search" placeholder="e.g. 4026" required
+        }}><label htmlFor="query">Bib number, name, or city/state</label><div className="lookup-row">
+          <input id="query" name="query" type="search" inputMode="search" placeholder="e.g. 4026 or Lowell" required
             disabled={switching} value={query} onChange={(event) => {
               setQuery(event.target.value);
               if (!event.target.value.trim()) reset();

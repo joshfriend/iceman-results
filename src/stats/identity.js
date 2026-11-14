@@ -7,29 +7,31 @@ export function findRiders(riders, query) {
   const words = searchWords(text);
   if (!words.length) return [];
 
-  const candidates = riders.flatMap((rider) => {
-    const nameWords = searchWords(rider.name);
-    if (nameWords.length === words.length && nameWords.every((word, i) => word === words[i])) {
-      return [{ rider, exact: words.length }];
-    }
+  const names = searchRiders(riders, words, (rider) => rider.name);
+  return names.length ? names : searchRiders(riders, words, (rider) =>
+    [rider.city, rider.state].filter(Boolean).join(" "), false);
+}
 
+function searchRiders(riders, words, valueForRider, bestOnly = true) {
+  const candidates = riders.flatMap((rider) => {
+    const fieldWords = searchWords(valueForRider(rider) ?? "");
     const used = new Set();
     let exact = 0;
     for (const word of [...words].sort((a, b) => b.length - a.length)) {
-      const exactIndex = nameWords.findIndex((nameWord, i) => !used.has(i) && nameWord === word);
+      const exactIndex = fieldWords.findIndex((fieldWord, i) => !used.has(i) && fieldWord === word);
       const index = exactIndex >= 0
         ? exactIndex
-        : nameWords.findIndex((nameWord, i) => !used.has(i) && nameWord.startsWith(word));
+        : fieldWords.findIndex((fieldWord, i) => !used.has(i) && fieldWord.startsWith(word));
       if (index < 0) return [];
       used.add(index);
-      if (nameWords[index] === word) exact++;
+      if (fieldWords[index] === word) exact++;
     }
     return [{ rider, exact }];
   });
   if (!candidates.length) return [];
   const best = Math.max(...candidates.map(({ exact }) => exact));
   return candidates
-    .filter(({ exact }) => exact === best)
+    .filter(({ exact }) => !bestOnly || exact === best)
     .map(({ rider }) => rider)
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 }
@@ -91,9 +93,14 @@ export function identityMatches(rider, candidates, nameMatches,
 }
 
 export function findYearRiders(riders, query, nextRiders) {
-  const current = findRiders(riders, query);
+  const text = query.trim().toLowerCase();
+  const words = searchWords(text);
+  if (!/^\d+$/.test(text) && !words.length) return [];
+  const current = /^\d+$/.test(text)
+    ? riders.filter((r) => r.bib === Number(text))
+    : searchRiders(riders, words, (rider) => rider.name);
   if (current.length !== 1) {
-    return /^\s*\d+\s*$/.test(query) ? [] : findRiders(nextRiders, query);
+    return /^\d+$/.test(text) ? [] : searchRiders(nextRiders, words, (rider) => rider.name);
   }
   const rider = current[0];
   const name = searchWords(rider.name).join(" ");
@@ -101,10 +108,7 @@ export function findYearRiders(riders, query, nextRiders) {
     rider.person && other.person
       ? other.person === rider.person
       : searchWords(other.name).join(" ") === name);
-  if (matches.length <= 1) return matches;
-  const sameCity = matches.filter((other) =>
-    String(other.city ?? "").trim().toLowerCase() === String(rider.city ?? "").trim().toLowerCase());
-  return sameCity.length === 1 ? sameCity : matches;
+  return matches;
 }
 
 export function riderHistory(rider, history) {

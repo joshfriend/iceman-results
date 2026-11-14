@@ -172,10 +172,7 @@ export function estimateNextWave(rider, history, waves, race) {
           agesCompatible(result.rider, other, result.year, year.race.year)));
     const matches = year.race.year === race.year
       ? eligible.filter((r) => r.bib === rider.bib)
-      : sameName.length > 1
-        ? sameName.filter((r) =>
-          String(r.city ?? "").trim().toLowerCase() === String(rider.city ?? "").trim().toLowerCase())
-        : sameName;
+      : sameName;
     if (matches.length === 1) {
       results.push({ year: year.race.year, net: matches[0].net, rider: matches[0] });
     }

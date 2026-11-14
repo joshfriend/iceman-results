@@ -464,7 +464,7 @@ test("year changes handle unsubmitted names, missing bibs, and duplicate names",
     { bib: null, name: "Rider One", person: "rider-one", city: " town " },
     { bib: 99, name: "Rider One", person: "rider-one", city: "Elsewhere" },
   ];
-  assert.deepEqual(findYearRiders(current, "12", next), [next[0]]);
+  assert.deepEqual(findYearRiders(current, "12", next), next);
   assert.deepEqual(findYearRiders([], "Rider", next), next);
   assert.deepEqual(findYearRiders(current, "No Match", next), []);
   assert.deepEqual(findYearRiders([{ ...current[0], city: "Other" }], "12", next), next);
@@ -883,7 +883,7 @@ test("next-wave estimate ignores pro and junior distributions without amateur wa
   assert.equal(result.waveMedian, 95);
 });
 
-test("next-wave estimate returns null for non-finishers and disambiguates repeated names by city", () => {
+test("next-wave estimate leaves repeated-name history ambiguous regardless of city", () => {
   const rider = { bib: 123, person: "rider", city: "Town", finished: true, wave: 2 };
   const history = [
     {
@@ -907,9 +907,9 @@ test("next-wave estimate returns null for non-finishers and disambiguates repeat
     wave: 2,
     currentWave: 2,
     wavesAhead: 0,
-    average: 90,
-    resultCount: 2,
-    years: [2024, 2025],
+    average: 100,
+    resultCount: 1,
+    years: [2025],
     requirement: null,
     requirementType: "faster than",
     waveMedian: 100,
@@ -947,6 +947,16 @@ test("finds riders by bib or name", () => {
   assert.deepEqual(findRiders(riders, "lauren h").map((r) => r.bib), [1608]);
   assert.ok(findRiders(riders, "laur").some((r) => r.bib === 2462));
   assert.deepEqual(findRiders(riders, "999999"), []);
+});
+
+test("finds riders by city and state without treating location as an identity", () => {
+  const lowell = findRiders(riders, "Lowell");
+  assert.ok(lowell.length > 0);
+  assert.ok(lowell.every((rider) => rider.city.toLowerCase().includes("lowell")));
+  assert.ok(lowell.some((rider) => rider.name === "Josh Friend"));
+  assert.ok(findRiders(riders, "Lowell MI").every((rider) => rider.city === "Lowell, MI"));
+  assert.ok(findRiders(riders, "MN").some((rider) => rider.city.endsWith(", MN")));
+  assert.deepEqual(findYearRiders(lowell, "Lowell", riders2025), []);
 });
 
 test("sorts matching names alphabetically without case sensitivity", () => {
