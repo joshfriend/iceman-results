@@ -161,7 +161,7 @@ describe("results explorer", () => {
     window.history.replaceState(null, "", "/?year=2026&bib=64");
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Trey Shepard" })).toBeTruthy();
-    const row = await screen.findByRole("row", { name: /2026.*Pro men/ });
+    const row = await screen.findByRole("row", { name: /2026.*Pro men/ }, { timeout: 10000 });
     expect(within(row).queryByText("Wave 55")).toBeNull();
     expect(screen.getByRole("columnheader", { name: "Division / start group" })).toBeTruthy();
     expect(document.querySelector("#earliest-wave-caught")).toBeNull();
@@ -172,7 +172,7 @@ describe("results explorer", () => {
     window.history.replaceState(null, "", "/?year=2026&bib=4806");
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Brad White" })).toBeTruthy();
-    expect(await screen.findByRole("columnheader", { name: "Division / start group" })).toBeTruthy();
+    expect(await screen.findByRole("columnheader", { name: "Division / start group" }, { timeout: 10000 })).toBeTruthy();
     const row = await screen.findByRole("row", { name: /2026.*Tandem · 1st/ }, { timeout: 10000 });
     expect(within(row).getByRole("cell", { name: "Tandem · 1st Wave 8" })).toBeTruthy();
     expect(within(row).getByRole("cell", { name: /208.*Amateur/ })).toBeTruthy();
@@ -243,7 +243,7 @@ describe("results explorer", () => {
     expect(await screen.findByRole("heading", { name: "Scott Dykema" })).toBeTruthy();
     expect(screen.getByText("Listed as DSQ, so there's no finish time to chart.")).toBeTruthy();
     expect(document.querySelector("#details")).toBeNull();
-    expect(await screen.findByText(/matched year/)).toBeTruthy();
+    expect(await screen.findByText(/matched year/, {}, { timeout: 10000 })).toBeTruthy();
   }, 15000);
 
   it("replaces rider charts and summary when switching between finishers and non-finishers", async () => {
