@@ -1,5 +1,35 @@
 import { ageRange } from "./identity.js";
-import { median, percentile } from "./distributions.js";
+import { distributionStats, median, percentile } from "./distributions.js";
+
+export function recapCategoryStats(finishers) {
+  const groups = new Map();
+  const add = (key, label, type, gender, rider) => {
+    if (!groups.has(key)) groups.set(key, { key, label, type, gender, times: [] });
+    groups.get(key).times.push(rider.net);
+  };
+  for (const rider of finishers) {
+    if (!Number.isFinite(rider.net) || rider.net <= 0) continue;
+    const gender = rider.gender === "M" ? "Men" : rider.gender === "F" ? "Women" : "Unspecified Gender";
+    const field = { amateur: "amateur", pro: "pro", junior: "junior" }[rider.raceGroup]
+      ?? "unclassified";
+    const type = `${field[0].toUpperCase()}${field.slice(1)}`;
+    add(`${field}:${gender}`, `${gender} ${type}`, type, gender, rider);
+    const division = rider.division ?? "";
+    const specialty = /tandems?/i.test(division) ? "Tandem"
+      : /single[\s-]*speeds?/i.test(division) ? "Singlespeed"
+        : /fat\s*(?:bike|tires?)/i.test(division) ? "Fat Tire"
+          : /clydesdales?/i.test(division) ? "Clydesdale"
+            : /athena|big kneed gals/i.test(division) ? "Athena" : null;
+    if (specialty) {
+      const label = specialty === "Tandem" ? specialty : `${gender} ${specialty}`;
+      add(`specialty:${label}`, label, specialty, specialty === "Tandem" ? "" : gender, rider);
+    }
+  }
+  return [...groups.values()]
+    .sort((a, b) => Number(b.type === "Pro") - Number(a.type === "Pro")
+      || a.type.localeCompare(b.type) || a.gender.localeCompare(b.gender))
+    .map(({ times, ...group }) => ({ ...group, ...distributionStats(times) }));
+}
 
 export function ageGenderFinishTimes(finishers) {
   const grouped = new Map();

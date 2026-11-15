@@ -60,8 +60,9 @@ export function History({ rider, data, eventYears, loader, raceUrl, searchVersio
     <div id="history-charts" className="curves"></div>
     <div className="scroll-x">
       <table id="history-table" className="history-table" hidden={!results.length}>
-        <thead><tr><th scope="col">Year</th><th scope="col">Wave / category</th><th scope="col">Finish / avg speed</th>
-          <th scope="col">Time change</th><th scope="col">Field place</th><th scope="col">Ahead of field</th></tr></thead>
+        <thead><tr><th scope="col">Year</th><th scope="col">Division / start group</th><th scope="col">Finish / avg speed</th>
+          <th scope="col">Time change</th>
+          <th scope="col">Field place</th><th scope="col">Ahead of field</th></tr></thead>
         <tbody id="history-rows">{results.map((result) => {
           const yearData = yearsByYear.get(result.year);
           const place = yearData && podium(result.rider, yearData.finishers, yearData.race.podiumDepth);
@@ -75,17 +76,21 @@ export function History({ rider, data, eventYears, loader, raceUrl, searchVersio
               {award && <> <span className="podium-mark" title={`${ordinal(place.place)} place in ${divisionLabel(result.rider)}`}>
                 <Trophy color={award.color} label="" /><span>{ordinal(place.place)}</span></span></>}
             </th>
-            <td>{result.rider.wave
+            <td>{divisionLabel(result.rider) || "Not listed"}{result.net !== null
+              && Number.isInteger(result.rider.divisionRank) && result.rider.divisionRank > 0
+              ? ` · ${ordinal(result.rider.divisionRank)}` : ""}
+              <span className="history-detail"> {result.rider.wave
               ? result.rider.raceGroup === "pro"
                 ? proCategoryLabel(result.rider.gender) ?? `Wave ${result.rider.wave}`
                 : `Wave ${result.rider.wave}`
-              : "—"}</td>
-            <td>{result.net === null ? String(result.rider.status) : `${hms(result.net)}${Number.isFinite(result.rider.speed)
-              ? ` · ${result.rider.speed.toFixed(1)} mph` : ""}`}</td>
+              : "—"}</span></td>
+            <td>{result.net === null ? String(result.rider.status) : <>{hms(result.net)}
+              {Number.isFinite(result.rider.speed) &&
+                <span className="history-detail"> {result.rider.speed.toFixed(1)} mph</span>}</>}</td>
             <td>{change === null ? "—" : change === 0 ? "No change"
               : `${change < 0 ? "−" : "+"}${duration(Math.abs(change))}`}</td>
-            <td>{result.net === null ? "—"
-              : `${fmt(result.rank)} / ${fmt(result.fieldSize)} (${capitalize(result.rider.raceGroup ?? "amateur")})`}</td>
+            <td>{result.net === null ? "—" : <>{fmt(result.rank)} / {fmt(result.fieldSize)}
+              <span className="history-detail"> ({capitalize(result.rider.raceGroup ?? "amateur")})</span></>}</td>
             <td>{result.aheadPct === null ? "—" : `${result.aheadPct.toFixed(1)}%`}</td>
           </tr>;
         })}</tbody>

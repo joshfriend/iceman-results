@@ -163,6 +163,11 @@ h3 { font-size: 1.3rem; margin: 40px 0 8px; }
 #age-gender-finish-times { margin-top: 24px; }
 #age-gender-finish-times h3 { margin-top: 0; }
 #age-gender-finish-times-chart svg { display: block; width: 100%; height: auto; }
+.category-chart { min-width: 720px; }
+#category-finish-times-chart { overflow: auto; }
+.category-header, .category-body, .category-axis { width: max-content; }
+#category-finish-times-chart svg { display: block; width: auto; height: auto; max-width: none; }
+#category-finish-times-chart .category-row:focus { outline: 2px solid var(--accent); }
 .line.age-men { border-color: var(--accent); }
 .line.age-women { border-color: var(--red); }
 .course-pace-axis-label { fill: var(--muted); font-size: 13px; }
@@ -170,22 +175,6 @@ h3 { font-size: 1.3rem; margin: 40px 0 8px; }
 .swatch.entries-finished { background: var(--blue); }
 .swatch.entries-unfinished { background: var(--unfinished); }
 #entries-history-chart .entries-unfinished { fill: var(--unfinished); }
-.recap-breakdown {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.8fr);
-  align-items: start;
-  gap: 24px;
-  margin-top: 22px;
-  padding: 18px 20px;
-  border: 1px solid var(--grid);
-  border-radius: 12px;
-}
-.recap-breakdown h3 { margin: 0; }
-.recap-breakdown .muted { margin-top: 4px; }
-.recap-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-.recap-table th, .recap-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--grid); }
-.recap-table thead { color: var(--muted); font-size: 0.8rem; }
-.recap-table tbody tr:last-child th, .recap-table tbody tr:last-child td { border-bottom: 0; }
 
 .rider { margin-top: 24px; border-top: 1px solid var(--grid); padding-top: 24px; }
 
@@ -302,6 +291,9 @@ h3 { font-size: 1.3rem; margin: 40px 0 8px; }
 .history-table caption { text-align: left; color: var(--muted); font-size: 0.8rem; margin-bottom: 8px; }
 .history-table th, .history-table td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
 .history-table thead { color: var(--muted); }
+#history-table { min-width: 680px; }
+#history-table th, #history-table td { padding: 9px 8px; vertical-align: middle; }
+.history-detail { display: block; color: var(--muted); font-size: 0.8rem; }
 .history-table .selected-year { background: var(--band); }
 .history-table .podium-year {
   background: color-mix(in srgb, var(--podium-color) 10%, var(--surface));
@@ -359,7 +351,6 @@ footer a { color: var(--accent); }
   .facts { grid-template-columns: 1fr 1fr; }
   .recap-heading { align-items: start; flex-direction: column; gap: 12px; }
   .recap-highlight { max-width: none; }
-  .recap-breakdown { grid-template-columns: 1fr; }
   .fact:only-child { grid-column: 1 / -1; }
   .passes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .tile { padding: 12px 10px; }

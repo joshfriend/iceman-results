@@ -12,6 +12,7 @@ export function Recap({ index, eventYears, data, raceKey, raceUrl, hidden }) {
     charts.drawCoursePaceHistory();
     charts.drawCourseDistanceHistory();
     charts.drawAgeGenderFinishTimes(data);
+    charts.drawCategoryFinishTimes();
     return charts.destroy;
   }, [index, eventYears, data, raceKey, raceUrl]);
 
@@ -32,19 +33,22 @@ export function Recap({ index, eventYears, data, raceKey, raceUrl, hidden }) {
         : `The middle half of finishers finished between ${hms(recap.q1)} and ${hms(recap.q3)}.`}</p>
     </div>
     <Facts id="recap-facts" className="recap-facts" facts={facts} />
-    <div className="recap-breakdown">
-      <div><h3>Finishers by race group</h3>
-        <p className="muted">Count and median finish time for each published group.</p>
-        {recap.groups.some((group) => group.key === "unclassified") &&
-          <p id="recap-unclassified-note" className="footnote">Some historical results do not identify amateur or pro status; those finishers are kept separate.</p>}
-      </div>
-      <div className="scroll-x"><table className="recap-table">
-        <thead><tr><th scope="col">Race group</th><th scope="col">Finishers</th><th scope="col">Median</th></tr></thead>
-        <tbody id="recap-groups">{recap.groups.map((group) => <tr key={group.key}>
-          <th scope="row">{group.title}</th><td>{fmt(group.finishers)}</td><td>{hms(group.median)}</td>
-        </tr>)}</tbody>
-      </table></div>
-    </div>
+    <section id="category-finish-times" aria-labelledby="category-finish-times-title">
+      <h3 id="category-finish-times-title">Finish times by race category</h3>
+      <ul className="legend"><li><span className="swatch box"></span>Box: middle 50%</li>
+        <li><span className="line median-solid"></span>Median</li>
+        <li><span className="line range"></span>Whiskers: within 1.5×IQR</li>
+        <li><span className="dot"></span>Finishers</li>
+        <li><span className="dot outlier"></span>Outliers</li></ul>
+      <p id="category-finish-times-note" className="footnote">Age divisions are combined; waves are not used.
+        Amateur and pro overall groups include their specialty-class riders. Tandem combines all genders.
+        Unclassified means amateur or pro status was not published. Scroll right to see the slowest finishes beyond 2×IQR.</p>
+      <p id="category-finish-times-empty" className="footnote" role="status" hidden></p>
+      <div className="scroll-x"><div className="category-chart">
+        <div id="category-finish-times-chart" tabIndex="0" role="region"
+          aria-label="Race category chart rows" aria-describedby="category-finish-times-note"></div>
+      </div></div>
+    </section>
     <section className="entries-history" aria-labelledby="entries-history-title">
       <h3 id="entries-history-title">Entries by year</h3>
       <ul className="legend"><li><span className="swatch entries-finished"></span>Finished</li>

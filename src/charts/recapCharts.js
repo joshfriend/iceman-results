@@ -1,10 +1,80 @@
 import * as d3 from "d3";
-import { ageGenderFinishTimes, hms } from "../stats/index.js";
-import { COLORS, fmt, addChartTooltip } from "./shared.js";
+import { ageGenderFinishTimes, hm, hms, recapCategoryStats } from "../stats/index.js";
+import { COLORS, fmt, addChartTooltip, distributionColumns, distributionScale, drawDistributionRow, seededRandom } from "./shared.js";
 import { chartScope } from "./scope.js";
 
 export function createRecapCharts(root, { index, eventYears, data, raceKey, raceUrl }) {
   const { $, observe, on, destroy } = chartScope(root, { ownsTooltip: true });
+function drawCategoryFinishTimes() {
+  const categories = recapCategoryStats(data.finishers);
+  const container = $("category-finish-times-chart");
+  const empty = $("category-finish-times-empty");
+  empty.hidden = categories.length > 0;
+  empty.textContent = categories.length ? "" : "No published finish times are available.";
+  if (!categories.length) return;
+  let lastWidth = 0;
+  const draw = () => {
+    const visibleWidth = Math.round(container.clientWidth) || 1000;
+    if (visibleWidth === lastWidth) return;
+    lastWidth = visibleWidth;
+    container.replaceChildren();
+    const rowHeight = 22;
+    const margin = { top: 28, right: 150, bottom: 48, left: 180 };
+    const height = categories.length * rowHeight;
+    const { x, plotWidth, ticks } = distributionScale(categories,
+      Math.max(360, visibleWidth - margin.left - margin.right));
+    const random = seededRandom(data.race.year);
+    const columns = (name, h) => {
+      const band = document.createElement("div");
+      band.className = `category-${name}`;
+      container.append(band);
+      return distributionColumns(band, h, { ...margin, plotWidth });
+    };
+    const head = columns("header", margin.top);
+    const body = columns("body", height);
+    const axis = columns("axis", margin.bottom);
+    body.plot.attr("role", "group").attr("aria-label", `Finish times by race category for ${data.race.year}`)
+      .attr("aria-describedby", "category-finish-times-note");
+    body.plot.append("g").selectAll("line").data(ticks).join("line")
+      .attr("class", "gridline").attr("x1", x).attr("x2", x)
+      .attr("y1", 0).attr("y2", height);
+    axis.plot.append("g").attr("class", "axis")
+      .call(d3.axisBottom(x).tickValues(ticks).tickFormat(hm).tickPadding(8));
+    axis.left.append("text").attr("x", margin.left - 8).attr("y", 24)
+      .attr("text-anchor", "end").attr("fill", COLORS.muted)
+      .attr("font-size", 12).text("Finish time (h:mm)");
+    head.left.append("text").attr("x", 8).attr("y", 18)
+      .attr("font-size", 11).attr("fill", COLORS.muted).text("CATEGORY");
+    for (const [label, x] of [["FINISHERS", 18], ["MEDIAN", 90]]) head.right.append("text")
+      .attr("x", x).attr("y", 18).attr("font-size", 11).attr("fill", COLORS.muted).text(label);
+    categories.forEach((group, i) => {
+      const cy = (i + 0.5) * rowHeight;
+      const summary = `${group.label}: ${fmt(group.n)} finishers, median ${hms(group.median)}, `
+        + `middle 50% ${hms(group.q1)} to ${hms(group.q3)}, `
+        + `whiskers ${hms(group.whiskerMin)} to ${hms(group.whiskerMax)}`;
+      const [leftRow, row, rightRow] = [body.left, body.plot, body.right].map((svg) => {
+        const band = svg.append("g");
+        band.append("title").text(summary);
+        if (i % 2 === 0) band.append("rect")
+          .attr("x", 0).attr("y", cy - rowHeight / 2 + 0.5).attr("width", "100%")
+          .attr("height", rowHeight - 1).attr("fill", COLORS.band);
+        return band;
+      });
+      row.attr("class", "category-row").attr("tabindex", 0).attr("role", "img").attr("aria-label", summary);
+      leftRow.append("text").attr("x", 8).attr("y", cy).attr("dominant-baseline", "middle")
+        .attr("font-size", 12).attr("fill", COLORS.ink).text(group.label);
+      drawDistributionRow(row, group, {
+        x, cy, rowHeight, color: COLORS.blue, random, label: group.label,
+        aggregate: !group.key.startsWith("specialty:"), classPrefix: "category",
+      });
+      for (const [value, x] of [[fmt(group.n), 18], [hms(group.median), 90]]) rightRow.append("text")
+        .attr("x", x).attr("y", cy).attr("dominant-baseline", "middle")
+        .attr("font-size", 12).attr("fill", COLORS.ink).text(value);
+    });
+  };
+  observe(container, draw);
+  draw();
+}
 function drawEntriesHistory() {
   const entries = [...eventYears].sort((a, b) => a.year - b.year);
   const years = d3.range(entries[0].year, entries.at(-1).year + 1);
@@ -360,5 +430,5 @@ function drawAgeGenderFinishTimes(raceData) {
 }
 
 
-  return { drawEntriesHistory, drawCoursePaceHistory, drawCourseDistanceHistory, drawAgeGenderFinishTimes, destroy };
+  return { drawEntriesHistory, drawCoursePaceHistory, drawCourseDistanceHistory, drawAgeGenderFinishTimes, drawCategoryFinishTimes, destroy };
 }

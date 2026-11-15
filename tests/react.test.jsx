@@ -2,9 +2,12 @@
 import { readFile } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { select } from "d3";
 import App from "../src/App.jsx";
+import { Recap } from "../src/components/Recap.jsx";
 import { chartScope } from "../src/charts/scope.js";
-import { COLORS } from "../src/charts/shared.js";
+import { COLORS, distributionScale, drawDistributionRow, seededRandom } from "../src/charts/shared.js";
+import { distributionStats } from "../src/stats/distributions.js";
 
 class ResizeObserverStub {
   observe() {}
@@ -33,6 +36,63 @@ afterEach(() => {
 });
 
 describe("results explorer", () => {
+  it("draws identical distribution marks for rider and recap charts", () => {
+    const group = distributionStats([3600, 3660, 3720, 3780, 18000]);
+    const { x, plotWidth, ticks } = distributionScale([group], 360);
+    expect(plotWidth).toBeGreaterThan(360);
+    expect(ticks[1] - ticks[0]).toBe(30);
+    const draw = (classPrefix) => {
+      const svg = select(document.createElementNS("http://www.w3.org/2000/svg", "svg"));
+      drawDistributionRow(svg, group, {
+        x, cy: 11, rowHeight: 22, color: COLORS.blue,
+        random: seededRandom(2026), label: "Test", classPrefix,
+      });
+      return svg.node().innerHTML.replaceAll(classPrefix, "distribution");
+    };
+    expect(draw("wave")).toBe(draw("category"));
+  });
+
+  it("shows category whiskers on the main recap without age divisions or waves", async () => {
+    render(<App />);
+    const section = await screen.findByRole("region", { name: "Finish times by race category" });
+    expect(screen.queryByRole("heading", { name: "Finishers by race group" })).toBeNull();
+    await waitFor(() => expect(section.querySelectorAll(".category-row").length).toBeGreaterThan(0));
+    const labels = Array.from(section.querySelectorAll(".category-body .wave-left text"),
+      (node) => node.textContent);
+    expect(labels).toEqual(expect.arrayContaining([
+      "Men Amateur", "Women Amateur", "Men Pro", "Women Pro",
+      "Men Singlespeed", "Women Singlespeed", "Men Fat Tire", "Women Fat Tire", "Tandem",
+    ]));
+    expect(labels.some((label) => /wave|\d|U40/i.test(label))).toBe(false);
+    const tandem = within(section).getByRole("img", { name: /^Tandem:/ });
+    expect(tandem.getAttribute("aria-label")).toContain("median");
+    expect(tandem.querySelectorAll(".category-whisker")).toHaveLength(3);
+    expect(tandem.querySelector(".category-box")).toBeTruthy();
+    expect(tandem.querySelector(".category-median")).toBeTruthy();
+    expect(section.querySelectorAll(".category-outlier").length).toBeGreaterThan(0);
+    expect(section.querySelectorAll(".wave-left")).toHaveLength(3);
+    expect(section.querySelectorAll(".wave-right")).toHaveLength(3);
+    expect(section.querySelectorAll(".wave-plot")).toHaveLength(3);
+    expect(section.querySelector(".category-header .wave-right").textContent).toBe("FINISHERSMEDIAN");
+    const finishers = tandem.querySelectorAll(".category-finisher");
+    const count = Number(tandem.getAttribute("aria-label").match(/: ([\d,]+) finishers/)[1].replaceAll(",", ""));
+    expect(finishers).toHaveLength(count);
+    expect(new Set(Array.from(finishers, (dot) => dot.getAttribute("cy"))).size).toBeGreaterThan(1);
+    expect(finishers[0].getAttribute("r")).toBe("1.6");
+    expect(finishers[0].getAttribute("opacity")).toBe("0.3");
+    const amateur = within(section).getByRole("img", { name: /^Men Amateur:/ });
+    expect(amateur.querySelector(".category-finisher").getAttribute("opacity")).toBe("0.08");
+  });
+
+  it("shows an explicit empty state when category finish times are unavailable", () => {
+    render(<Recap index={{}} eventYears={[{ year: 2026, riders: 0, finishers: 0 }]}
+      data={{ race: { year: 2026 }, riders: [], finishers: [] }} raceKey="slush-cup"
+      raceUrl={(year) => `?year=${year}`} hidden={false} />);
+    const section = screen.getByRole("region", { name: "Finish times by race category" });
+    expect(within(section).getByRole("status").textContent).toBe("No published finish times are available.");
+    expect(section.querySelector("svg")).toBeNull();
+  });
+
   it("defines every chart color for both system themes", async () => {
     const style = document.createElement("style");
     style.textContent = await readFile("style.css", "utf8");
@@ -74,7 +134,7 @@ describe("results explorer", () => {
     expect(await screen.findByRole("heading", { name: "Matt Huisman" })).toBeTruthy();
     expect(window.location.search).toBe("?year=2026&bib=2798");
     expect(screen.queryByRole("heading", { name: "2026 race recap" })).toBeNull();
-    expect(screen.getByText("2:58:02")).toBeTruthy();
+    expect(within(document.querySelector("#rider-facts")).getByText("2:58:02")).toBeTruthy();
     expect(await screen.findByText("5 matched years", {}, { timeout: 10000 })).toBeTruthy();
     expect(screen.getByRole("columnheader", { name: "Finish / avg speed" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "Speed" }).disabled).toBe(false);
@@ -103,9 +163,19 @@ describe("results explorer", () => {
     expect(await screen.findByRole("heading", { name: "Trey Shepard" })).toBeTruthy();
     const row = await screen.findByRole("row", { name: /2026.*Pro men/ });
     expect(within(row).queryByText("Wave 55")).toBeNull();
-    expect(screen.getByRole("columnheader", { name: "Wave / category" })).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Division / start group" })).toBeTruthy();
     expect(document.querySelector("#earliest-wave-caught")).toBeNull();
     expect(document.querySelector("#latest-wave-passed-by")).toBeTruthy();
+  }, 15000);
+
+  it("shows the published division and place separately from the overall field in history", async () => {
+    window.history.replaceState(null, "", "/?year=2026&bib=4806");
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Brad White" })).toBeTruthy();
+    expect(await screen.findByRole("columnheader", { name: "Division / start group" })).toBeTruthy();
+    const row = await screen.findByRole("row", { name: /2026.*Tandem · 1st/ }, { timeout: 10000 });
+    expect(within(row).getByRole("cell", { name: "Tandem · 1st Wave 8" })).toBeTruthy();
+    expect(within(row).getByRole("cell", { name: /208.*Amateur/ })).toBeTruthy();
   }, 15000);
 
   it("shows the unassigned amateur field as a whisker distribution", async () => {

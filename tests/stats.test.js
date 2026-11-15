@@ -5,7 +5,7 @@ import { test } from "node:test";
 import {
   ageGenderFinishTimes, comparisonField, comparisonRank, divisionLabel, estimateNextWave, findRiders, findYearRiders, groupsFor, juniorCategoryStats, kde, parseRace,
   passCounts, passDistribution, passWaveExtremes, proWaveStats, raceRecap, riderHistory, riderSplits, selectRaceEvent, waveDistributions, waveStats,
-  winnerGaps,
+  winnerGaps, recapCategoryStats,
 } from "../src/stats/index.js";
 
 const readJson = (path) => JSON.parse(readFileSync(new URL(`../data/${path}`, import.meta.url)));
@@ -16,6 +16,72 @@ const { riders: riders2025, finishers: finishers2025 } = parseIceman("2025/resul
 const { riders: riders2001, finishers: finishers2001 } = parseIceman("2001/results.json");
 const { riders: riders2024, finishers: finishers2024 } = parseIceman("2024/results.json");
 const josh = riders.find((r) => r.bib === 4026);
+
+test("recap categories combine ages and waves but preserve gender and race groups", () => {
+  const rows = [
+    { gender: "M", raceGroup: "amateur", division: "Singlespeed Men U40", wave: 1, net: 100 },
+    { gender: "M", raceGroup: "amateur", division: "M Single Speed Male 40+", wave: 20, net: 200 },
+    { gender: "M", raceGroup: "amateur", division: "Men 40", net: 300 },
+    { gender: "F", raceGroup: "amateur", division: "F Fat Tire Women", net: 400 },
+    { gender: "M", raceGroup: "pro", division: "Pro/Cat 1 M", net: 50 },
+    { gender: "M", raceGroup: "junior", division: "Junior Men U15", net: 500 },
+    { gender: "M", raceGroup: "unclassified", division: "M N/A", net: 600 },
+    { gender: "M", raceGroup: "amateur", division: "Tandem", net: 700 },
+    { gender: "F", raceGroup: "amateur", division: "Tandem", net: 800 },
+    { gender: "F", raceGroup: "amateur", division: "Athena Women", net: 900 },
+    { gender: "M", raceGroup: "amateur", division: "Clydesdale U40", net: 1000 },
+    { gender: "M", raceGroup: "amateur", division: "Singlespeed Men U40", net: null },
+    { gender: "M", raceGroup: "amateur", net: 0 },
+  ];
+  const groups = new Map(recapCategoryStats(rows).map((group) => [group.label, group]));
+  assert.deepEqual(groups.get("Men Singlespeed").times, [100, 200]);
+  assert.equal(groups.get("Men Singlespeed").median, 150);
+  assert.equal(groups.get("Men Singlespeed").q1, 125);
+  assert.equal(groups.get("Men Singlespeed").q3, 175);
+  assert.deepEqual(groups.get("Men Amateur").times, [100, 200, 300, 700, 1000]);
+  assert.deepEqual(groups.get("Tandem").times, [700, 800]);
+  assert.deepEqual(groups.get("Women Fat Tire").times, [400]);
+  assert.equal(groups.get("Women Fat Tire").whiskerMin, 400);
+  assert.equal(groups.get("Women Fat Tire").whiskerMax, 400);
+  assert.deepEqual(groups.get("Men Pro").times, [50]);
+  assert.deepEqual(groups.get("Men Junior").times, [500]);
+  assert.deepEqual(groups.get("Men Unclassified").times, [600]);
+  assert.deepEqual(groups.get("Women Athena").times, [900]);
+  assert.deepEqual(groups.get("Men Clydesdale").times, [1000]);
+  assert.deepEqual(recapCategoryStats([]), []);
+});
+
+test("recap category distributions use IQR whiskers and merge published specialty divisions", () => {
+  const stats = recapCategoryStats([100, 110, 120, 130, 1000].map((net) => ({
+    gender: "M", raceGroup: "amateur", net,
+  })))[0];
+  assert.equal(stats.whiskerMin, 100);
+  assert.equal(stats.whiskerMax, 130);
+  assert.equal(stats.max, 1000);
+  for (const field of [finishers2025, finishers]) {
+    const groups = recapCategoryStats(field);
+    for (const [label, pattern, gender] of [
+      ["Men Singlespeed", /single\s*speeds?/i, "M"],
+      ["Men Fat Tire", /fat\s*(?:bike|tire)/i, "M"],
+    ]) {
+      const group = groups.find((group) => group.label === label);
+      assert.equal(group.n, field.filter((rider) =>
+        rider.gender === gender && pattern.test(rider.division)).length);
+      assert.ok(group.n > 0);
+    }
+    assert.equal(groups.find((group) => group.label === "Men Amateur").n,
+      field.filter((rider) => rider.gender === "M" && rider.raceGroup === "amateur").length);
+  }
+});
+
+test("recap categories sort Pro first, then division type and gender alphabetically", () => {
+  const labels = recapCategoryStats(finishers).map((group) => group.label);
+  assert.deepEqual(labels, [
+    "Men Pro", "Women Pro", "Men Amateur", "Women Amateur", "Women Athena",
+    "Men Clydesdale", "Men Fat Tire", "Women Fat Tire", "Men Junior", "Women Junior",
+    "Men Singlespeed", "Women Singlespeed", "Tandem",
+  ]);
+});
 
 test("age and gender finish-time data summarizes all finishers by exact age", () => {
   assert.deepEqual(ageGenderFinishTimes([

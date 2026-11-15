@@ -4,5 +4,5 @@ export { comparisonField, comparisonRank, winnerGaps, passCounts, passWaveExtrem
 export { riderSplits } from "./splits.js";
 export { ordinal, duration, hms, hm, clockTime } from "./format.js";
 export { median, populationSd, kde } from "./distributions.js";
-export { ageGenderFinishTimes, raceRecap } from "./recap.js";
+export { ageGenderFinishTimes, raceRecap, recapCategoryStats } from "./recap.js";
 export { divisionLabel, groupsFor, waveStats, proWaveStats, proCategoryLabel, juniorCategoryStats, waveDistributions, estimateNextWave } from "./groups.js";

@@ -2,6 +2,19 @@
 
 An interactive explorer for Iceman Cometh race results, rider history, and checkpoint splits.
 The site follows your device's light or dark appearance preference.
+Rider history shows each year's published division and division place separately
+from the overall amateur/pro/junior field placement.
+
+The main recap compares finish times with box-and-whisker plots for gender and
+race groups, plus published specialty classes such as singlespeed, fat tire,
+tandem, Clydesdale, and Athena. Age divisions are combined, not start waves.
+Overall groups include specialty-class riders; tandem is not split by gender.
+Whiskers use 1.5×IQR fences, with finishes beyond the fences shown as outliers.
+Category and rider plots share their drawing logic, with scattered finisher dots
+and a horizontally scrolling tail beyond 2×IQR.
+Both keep category/start-group labels and finisher counts/medians pinned while the
+plot scrolls. Recap categories list Pro first, then division type alphabetically,
+with genders grouped within each type.
 
 Browse the site at [iceman.fueledbycaffeine.com](https://iceman.fueledbycaffeine.com).
 

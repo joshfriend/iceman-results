@@ -1,6 +1,6 @@
 import * as d3 from "d3";
 import { clockTime, groupsFor, hm, hms, kde, passDistribution } from "../stats/index.js";
-import { COLORS, fmt } from "./shared.js";
+import { COLORS, distributionColumns, distributionScale, drawDistributionRow, fmt, seededRandom } from "./shared.js";
 import { chartScope } from "./scope.js";
 
 export function createRiderCharts(root, data) {
@@ -155,53 +155,21 @@ function drawCurves(rider) {
   }
 }
 
-function mulberry32(seed) {
-  return () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 function drawWaves(rider) {
   waveResizeObserver?.disconnect();
   const rowH = 22;
   const margin = { top: 34, right: 160, bottom: 48, left: 140 };
-  const pad = 16;
   const height = rowH * waves.length;
   const viewport = $("wave-rows");
   const drawnWidth = viewport.clientWidth;
 
-  // The plot is drawn at a fixed pixels-per-minute scale so that everything up to 2×IQR fills the
-  // visible width; the slower tail of outliers extends past it and is reached by scrolling.
-  const fullMin = Math.floor(d3.min(waves, (w) => w.min) / 60 / 30) * 30;
-  const fullMax = Math.ceil(d3.max(waves, (w) => w.max) / 60 / 30) * 30;
-  const coreMax = Math.min(fullMax, Math.ceil(d3.max(waves, (w) =>
-    Math.min(w.max, w.q3 + 2 * (w.q3 - w.q1))) / 60 / 30) * 30);
   const visibleWidth = Math.max(360, (drawnWidth || 1000) - margin.left - margin.right);
-  const pxPerMinute = (visibleWidth - 2 * pad) / Math.max(30, coreMax - fullMin);
-  const plotWidth = Math.round((fullMax - fullMin) * pxPerMinute + 2 * pad);
-  const totalWidth = margin.left + plotWidth + margin.right;
-  const x = d3.scaleLinear([fullMin, fullMax], [pad, plotWidth - pad]);
-  const ticks = d3.range(fullMin, fullMax + 1, 30);
+  const { x, plotWidth, ticks, pad } = distributionScale(waves, visibleWidth);
 
   const rowY = (i) => rowH * i + rowH / 2;
-  const random = mulberry32(data.race.year);
+  const random = seededRandom(data.race.year);
 
-  // Each band is three columns: pinned labels, the wide scrolling plot, and pinned stats.
-  const columns = (container, h) => {
-    const track = d3.select(container).html("").append("div")
-      .attr("class", "wave-track").style("width", `${totalWidth}px`);
-    const column = (name, w) => track.append("div").attr("class", `wave-col wave-${name}`)
-      .style("width", `${w}px`).append("svg")
-      .attr("width", w).attr("height", h).attr("viewBox", `0 0 ${w} ${h}`);
-    return {
-      left: column("left", margin.left).attr("aria-hidden", "true"),
-      plot: column("plot", plotWidth),
-      right: column("right", margin.right).attr("aria-hidden", "true"),
-    };
-  };
+  const columns = (container, h) => distributionColumns(container, h, { ...margin, plotWidth });
   const head = columns($("wave-header"), margin.top);
   const body = columns($("wave-rows-content"), height);
   const axis = columns($("wave-axis"), margin.bottom);
@@ -264,39 +232,10 @@ function drawWaves(rider) {
       leftRow.append("rect").attr("x", 0).attr("y", cy - rowH / 2).attr("width", 3)
         .attr("height", rowH).attr("fill", COLORS.accent);
     }
-    const lo = x(w.whiskerMin / 60);
-    const hi = x(w.whiskerMax / 60);
-    const isOutlier = (t) => t < w.lowerFence || t > w.upperFence;
-    const aggregate = w.kind === "amateur-unassigned";
-    row.append("g").selectAll("circle").data(w.times).join("circle")
-      .attr("class", "wave-finisher")
-      .attr("cx", (t) => x(t / 60)).attr("cy", () => cy + (random() - 0.5) * rowH * 0.56)
-      .attr("r", aggregate ? 1.1 : 1.6)
-      .attr("fill", (t) => isOutlier(t) ? "none" : color)
-      .attr("stroke", (t) => isOutlier(t) ? color : "none")
-      .attr("stroke-width", 0.7)
-      .attr("opacity", aggregate ? 0.08 : 0.3)
-      .append("title").text((t) => `${rowName} · ${hms(t)}${isOutlier(t)
-        ? " · Outlier: outside this group's 1.5×IQR fences" : ""}`);
-    row.append("line").attr("class", "wave-whisker")
-      .attr("x1", lo).attr("x2", hi).attr("y1", cy).attr("y2", cy)
-      .attr("stroke", COLORS.range).attr("stroke-width", aggregate ? 1.5 : 0.9);
-    for (const end of [lo, hi]) {
-      row.append("line").attr("class", "wave-whisker")
-        .attr("x1", end).attr("x2", end).attr("y1", cy - 2.5).attr("y2", cy + 2.5)
-        .attr("stroke", COLORS.range).attr("stroke-width", aggregate ? 1.5 : 0.9);
-    }
-    row.append("rect")
-      .attr("class", "wave-box")
-      .attr("x", x(w.q1 / 60)).attr("width", x(w.q3 / 60) - x(w.q1 / 60))
-      .attr("y", cy - rowH * 0.24).attr("height", rowH * 0.48)
-      .attr("fill", color).attr("fill-opacity", aggregate ? 0.32 : 0.25)
-      .attr("stroke", color).attr("stroke-opacity", aggregate ? 0.9 : 0.5)
-      .attr("stroke-width", aggregate ? 1.2 : 1);
-    row.append("line").attr("class", "wave-median")
-      .attr("x1", x(w.median / 60)).attr("x2", x(w.median / 60))
-      .attr("y1", cy - rowH * 0.26).attr("y2", cy + rowH * 0.26)
-      .attr("stroke", COLORS.ink).attr("stroke-width", 2.2);
+    drawDistributionRow(row, w, {
+      x, cy, rowHeight: rowH, color, random, label: rowName,
+      aggregate: w.kind === "amateur-unassigned",
+    });
 
     const labelColor = mineRow ? COLORS.accent : COLORS.ink;
     const weight = mineRow ? 700 : 400;
