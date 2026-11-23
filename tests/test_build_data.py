@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts.build_data import (
-    apply_result_overrides, apply_split_distances, athlinks_divisions, athlinks_race_group, athlinks_speed, build_year, FIELDS, monotonic_splits, parse_athlinks,
+    apply_result_overrides, apply_split_distances, athlinks_divisions, athlinks_race_group, athlinks_speed, build_year, FIELDS, monotonic_splits, normalize_city, parse_athlinks,
     raceresult_splits, registericeman_splits,
     parse_metadata_csv, parse_raceresult, parse_registericeman, parse_runmichigan,
     parse_start_list, parse_wave_placements, published_age, published_speed, race_group,
@@ -15,6 +15,33 @@ from scripts.build_data import (
 )
 from scripts.download_athlinks import deduplicate_rows, division_group, fetch_division_page, write_year
 from scripts.download_supplemental import raceresult, registericeman
+
+
+class CityNormalizationTests(unittest.TestCase):
+    def test_corrects_adjacent_repeated_localities(self):
+        for city, expected in (
+            ("Muskegonmuskegon, MI", "Muskegon, MI"),
+            ("Grand RapidsGrand Rapids", "Grand Rapids"),
+            ("Paw PawPaw Paw, MI", "Paw Paw, MI"),
+            ("AdaAda", "Ada"),
+            ("Birminghammingham", "Birmingham"),
+            ("Boulderlder, CO", "Boulder, CO"),
+            ("Carmelmel", "Carmel"),
+            ("Deltonelton, MI", "Delton, MI"),
+            ("Grangeranger", "Granger"),
+            ("Shelbyvilleville", "Shelbyville"),
+            ("Traverse Citycity", "Traverse City"),
+            ("Troyroy, MI", "Troy, MI"),
+        ):
+            with self.subTest(city=city):
+                self.assertEqual(normalize_city(city), expected)
+
+    def test_preserves_legitimate_and_unmatched_locations(self):
+        for city in (None, "", "Paw Paw", "Paw Paw, MI", "Wawa", "Baden-Baden",
+                     "Muskegon, MI", "Muskegonmuskegonville, MI", "Coco Beach",
+                     "Cincinnati, OH", "Kawkawlin", "Higlandland Pa"):
+            with self.subTest(city=city):
+                self.assertEqual(normalize_city(city), city)
 
 
 class AthlinksIdentityTests(unittest.TestCase):
@@ -638,6 +665,20 @@ class WaveScheduleTests(unittest.TestCase):
             ):
                 build_year(folder)
             return json.loads((folder / "results.json").read_text())
+
+    def test_build_corrects_adjacent_duplicate_city_names(self):
+        result = self.build_archived_schedule([
+            {"bib": 1, "name": "First Rider", "city": "Muskegonmuskegon, MI"},
+            {"bib": 2, "name": "Second Rider", "city": "Grand RapidsGrand Rapids"},
+            {"bib": 3, "name": "Third Rider", "city": "Paw Paw"},
+            {"bib": 4, "name": "Fourth Rider", "city": "Wawa"},
+            {"bib": 5, "name": "Fifth Rider", "city": "Muskegonmuskegon, MI", "slush": True},
+        ], {})
+        cities = {row[FIELDS.index("bib")]: row[FIELDS.index("city")] for row in result["riders"]}
+        self.assertEqual(cities, {
+            1: "Muskegon, MI", 2: "Grand Rapids", 3: "Paw Paw",
+            4: "Wawa", 5: "Muskegon, MI",
+        })
 
     def test_archived_schedule_preserves_irregular_times_and_event_boundaries(self):
         schedule = json.loads(Path("data/2014/raw/wave-schedule.json").read_text())

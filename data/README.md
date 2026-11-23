@@ -31,7 +31,7 @@ the field order in `fields`. Important fields include:
 |---|---|
 | `bib` | Bib number for that year |
 | `person` | Year-independent key used to match riders across years |
-| `name`, `city`, `age` | Published values; unavailable values are `null` |
+| `name`, `city`, `age` | Published values; unavailable values are `null`. Adjacent duplicated city names are corrected as described below. |
 | `status` | Overall place, or `DNF`, `DNS`, or `DSQ` |
 | `net` | Finish time in seconds; `null` for non-finishers |
 | `avgSpeed` | Published average speed in mph when available |
@@ -45,6 +45,13 @@ Keep source values and attribution in the raw files and `race.json`; generated f
 are rebuilt outputs. Do not infer a separate junior event from a junior age division.
 Speed and course-distance values should reflect published source data when possible;
 the builder applies documented fallbacks when sources omit them.
+
+The builder corrects city names consisting of two adjacent, case-insensitive copies
+of the same locality (at least three characters per copy), preserving the first copy
+and any state or region. It leaves space-separated repeated names such as Paw Paw
+and short names such as Wawa unchanged. Archived source values are not modified.
+Known partial duplications, such as `Troyroy` and `Traverse Citycity`, are corrected
+using an explicit list rather than a general rule that could alter legitimate names.
 
 Use `resultOverrides` in `race.json` for an intentional correction to a result's status.
 Each entry identifies one result by `bib` and sets `status` to `DNF`, `DNS`, or `DSQ`.

@@ -33,6 +33,16 @@ FIELDS = [
 ]
 START_LINE = re.compile(r"^\s*(\d+)\s+(.+?)\s+(\d+)\s+(\d{2}:\d{2}:\d{2})\s+(\d+)\s*$")
 RANKED = re.compile(r"^\s*(.*?)\s*\((-?\d+)\)\s*$")
+CITY_CORRECTIONS = {
+    "birminghammingham": "Birmingham",
+    "boulderlder": "Boulder",
+    "carmelmel": "Carmel",
+    "deltonelton": "Delton",
+    "grangeranger": "Granger",
+    "shelbyvilleville": "Shelbyville",
+    "traverse citycity": "Traverse City",
+    "troyroy": "Troy",
+}
 
 
 def seconds(text):
@@ -102,6 +112,22 @@ def person_key(name):
     """Year-independent rider key. Bibs change every year, so cross-year matching uses the name."""
     ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
+
+
+def normalize_city(city):
+    if not city:
+        return city
+    locality, separator, region = city.partition(",")
+    if locality.casefold() in CITY_CORRECTIONS:
+        return CITY_CORRECTIONS[locality.casefold()] + separator + region
+    half = len(locality) // 2
+    if (
+        len(locality) % 2 == 0 and half >= 3
+        and not locality[half - 1].isspace() and not locality[half].isspace()
+        and locality[:half].casefold() == locality[half:].casefold()
+    ):
+        return locality[:half] + separator + region
+    return city
 
 
 def parse_start_list(path):
@@ -1024,6 +1050,7 @@ def build_year(folder):
 
     riders = []
     for r in parsed_results:
+        r["city"] = normalize_city(r["city"])
         r.setdefault("athlinksRacerId", None)
         r.setdefault("age", None)
         r.setdefault("avgSpeed", None)
